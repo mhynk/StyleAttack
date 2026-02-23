@@ -1,6 +1,6 @@
 # init_db.py
 from sqlmodel import SQLModel
-from db.database import engine
+from backend.db.database import engine
 
 
 def init_db():

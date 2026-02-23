@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from sqlmodel import select
 
 from services.classify import classify
-from dp import init_db, get_session
+from backend.dp import init_db, get_session
 from model import Prompt, Result, Transformation
 from services.ollama import call_ollama
 from schemas import PromptCreate, RunRequest
