@@ -1,25 +1,77 @@
 import styles from "./page.module.css";
 
 type Props = {
-  searchParams: { prompt?: string; style?: string };
+  searchParams: { prompt_id?: string; style?: string };
 };
 
 function clampPercent(n: number) {
   return Math.max(0, Math.min(100, n));
 }
 
-export default function ResultsPage({ searchParams }: Props) {
-  const prompt = (searchParams.prompt ?? "").trim();
+type DbResult = {
+  id: number;
+  prompt_id: number;
+  transformation_id: number | null;
+  label: string; // "Blocked" | "Bypassed" 등
+};
+
+type Card = {
+  title: string;
+  result: string;
+  percent?: number;
+  meta: string;
+};
+
+function labelToMeta(label: string) {
+  const low = label.toLowerCase();
+  if (low.includes("block")) return "Successful Defense";
+  if (low.includes("bypass")) return "Defense Failure";
+  return "Unknown";
+}
+
+export default async function ResultsPage({ searchParams }: Props) {
+  const promptIdStr = searchParams.prompt_id ?? "";
+  const prompt_id = Number(promptIdStr);
   const selectedStyle = (searchParams.style ?? "Poetry").trim();
 
-  // TODO: 나중에 여기서 실제 API 호출해서 결과를 받아오면 됨.
-  // 지금은 와이어프레임처럼 예시 수치만 넣어둠.
-  const results = [
-    { title: "Baseline Prompt", result: "Blocked", meta: "Successful Defense" },
-    { title: "Poetry Style", result: "Bypassed", percent: 60, meta: "Defense Failure" },
-    { title: "Metaphor Style", result: "Bypassed", percent: 40, meta: "Defense Failure" },
-    { title: "Narrative Style", result: "Bypassed", percent: 75, meta: "Defense Failure" },
-  ] as const;
+  let cards: Card[] = [];
+
+  if (!prompt_id || Number.isNaN(prompt_id)) {
+    cards = [{ title: "Error", result: "Missing prompt_id", meta: "Invalid URL" }];
+  } else {
+    // ✅ Next 프록시로 GET
+    const res = await fetch(`http://localhost:3000/api/result/${prompt_id}`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      cards = [{ title: "Error", result: "Failed to load", meta: msg }];
+    } else {
+      const data = (await res.json()) as DbResult[];
+
+      // 최신순으로 온다고 했으니, baseline 하나만 잡기
+      const baseline = data.find((r) => r.transformation_id === null);
+
+      // 스타일 결과들(지금은 style 이름을 dbResult에서 못 뽑으니 그냥 “Style #”로 표시)
+      const styled = data.filter((r) => r.transformation_id !== null);
+
+      cards = [
+        {
+          title: "Baseline Prompt",
+          result: baseline?.label ?? "N/A",
+          meta: baseline ? labelToMeta(baseline.label) : "No baseline result",
+        },
+        ...styled.map((r, idx) => ({
+          title: `Style Variant ${idx + 1}`,
+          result: r.label,
+          meta: labelToMeta(r.label),
+          // percent 없으니 생략 or 임시 0
+          // percent: 0,
+        })),
+      ];
+    }
+  }
 
   return (
     <div className={styles.frame}>
@@ -38,18 +90,14 @@ export default function ResultsPage({ searchParams }: Props) {
             <span className={styles.metaLabel}>Selected style</span>
             <span className={styles.metaValue}>{selectedStyle}</span>
           </div>
-          {prompt && (
-            <div className={styles.metaChip}>
-              <span className={styles.metaLabel}>Prompt</span>
-              <span className={styles.metaValue} title={prompt}>
-                {prompt.length > 48 ? prompt.slice(0, 48) + "…" : prompt}
-              </span>
-            </div>
-          )}
+          <div className={styles.metaChip}>
+            <span className={styles.metaLabel}>Prompt ID</span>
+            <span className={styles.metaValue}>{prompt_id || "N/A"}</span>
+          </div>
         </div>
 
         <div className={styles.cards}>
-          {results.map((c) => (
+          {cards.map((c) => (
             <div key={c.title} className={styles.card}>
               <div className={styles.cardTitle}>{c.title}</div>
 
@@ -57,13 +105,8 @@ export default function ResultsPage({ searchParams }: Props) {
                 <div className={styles.resultLabel}>Result :</div>
                 <div className={styles.resultValue}>
                   {c.result}
-                  {"percent" in c ? (
-                    <>
-                      <span className={styles.percent}>
-                        {" "}
-                        — {clampPercent(c.percent)}%
-                      </span>
-                    </>
+                  {typeof c.percent === "number" ? (
+                    <span className={styles.percent}> — {clampPercent(c.percent)}%</span>
                   ) : null}
                 </div>
               </div>

@@ -14,16 +14,47 @@ export default function PromptPage() {
 
   const canSubmit = useMemo(() => prompt.trim().length > 0, [prompt]);
 
-  function onSubmit() {
+  async function onSubmit() {
     if (!canSubmit) return;
-
-    // 2페이지로 이동 (프롬프트/스타일을 query로 전달)
-    const qs = new URLSearchParams({
-      prompt: prompt.trim(),
-      style,
-    });
-
-    router.push(`/result?${qs.toString()}`);
+  
+    try {
+      // 1️ : prompt 저장
+      const pRes = await fetch("/api/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: prompt.trim(),
+        }),
+      });
+  
+      if (!pRes.ok) {
+        const msg = await pRes.text();
+        throw new Error(`Prompt save failed: ${msg}`);
+      }
+  
+      const pJson = await pRes.json();
+      const prompt_id = pJson.id;
+  
+      // 2️ : run 실행
+      const rRes = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt_id,
+          styles: [style.toLowerCase()],
+        }),
+      });
+  
+      if (!rRes.ok) {
+        const msg = await rRes.text();
+        throw new Error(`Run failed: ${msg}`);
+      }
+  
+      // 3️ : 결과 페이지 이동
+      router.push(`/result?prompt_id=${prompt_id}&style=${style}`);
+    } catch (err: any) {
+      alert(err.message ?? "Something went wrong");
+    }
   }
 
   return (
