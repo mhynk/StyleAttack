@@ -12,7 +12,7 @@ type DbResult = {
   id: number;
   prompt_id: number;
   transformation_id: number | null;
-  label: string; // "Blocked" | "Bypassed" 등
+  label: string; // "Blocked" | "Bypassed" etc.
 };
 
 type Card = {
@@ -26,6 +26,19 @@ function labelToMeta(label: string) {
   const low = label.toLowerCase();
   if (low.includes("block")) return "Successful Defense";
   if (low.includes("bypass")) return "Defense Failure";
+  return "Unknown";
+}
+
+function labelToBadge(label: string): "ok" | "bad" | "unknown" {
+  const low = label.toLowerCase();
+  if (low.includes("block")) return "ok";
+  if (low.includes("bypass")) return "bad";
+  return "unknown";
+}
+
+function badgeText(meta: string) {
+  if (meta === "Successful Defense") return "Defense OK";
+  if (meta === "Defense Failure") return "Bypass";
   return "Unknown";
 }
 
@@ -50,10 +63,7 @@ export default async function ResultsPage({ searchParams }: Props) {
     } else {
       const data = (await res.json()) as DbResult[];
 
-      // 최신순으로 온다고 했으니, baseline 하나만 잡기
       const baseline = data.find((r) => r.transformation_id === null);
-
-      // 스타일 결과들(지금은 style 이름을 dbResult에서 못 뽑으니 그냥 “Style #”로 표시)
       const styled = data.filter((r) => r.transformation_id !== null);
 
       cards = [
@@ -66,8 +76,6 @@ export default async function ResultsPage({ searchParams }: Props) {
           title: `Style Variant ${idx + 1}`,
           result: r.label,
           meta: labelToMeta(r.label),
-          // percent 없으니 생략 or 임시 0
-          // percent: 0,
         })),
       ];
     }
@@ -76,13 +84,18 @@ export default async function ResultsPage({ searchParams }: Props) {
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
-        <div className={styles.logo}>StyleAttack</div>
+        <div className={styles.logoWrap}>
+          <div className={styles.logo}>StyleAttack</div>
+          <div className={styles.sponsor}>
+            sponsored by <strong>Ada Analytics</strong>
+          </div>
+        </div>
       </header>
 
       <section className={styles.body}>
         <p className={styles.desc}>
-          This shows the percentage of cases in which the AI failed to bypass the LLM&apos;s safety
-          mechanisms after the input prompt was transformed into the selected style.
+          This shows outcomes for the baseline prompt and its style-transformed variants. Use the
+          results to assess whether the transformation increased or decreased safety bypass success.
         </p>
 
         <div className={styles.metaRow}>
@@ -90,6 +103,7 @@ export default async function ResultsPage({ searchParams }: Props) {
             <span className={styles.metaLabel}>Selected style</span>
             <span className={styles.metaValue}>{selectedStyle}</span>
           </div>
+
           <div className={styles.metaChip}>
             <span className={styles.metaLabel}>Prompt ID</span>
             <span className={styles.metaValue}>{prompt_id || "N/A"}</span>
@@ -97,23 +111,38 @@ export default async function ResultsPage({ searchParams }: Props) {
         </div>
 
         <div className={styles.cards}>
-          {cards.map((c) => (
-            <div key={c.title} className={styles.card}>
-              <div className={styles.cardTitle}>{c.title}</div>
+          {cards.map((c) => {
+            const badgeKind = labelToBadge(c.result);
+            const meta = c.meta;
+            const badgeClass =
+              badgeKind === "ok"
+                ? styles.badgeOk
+                : badgeKind === "bad"
+                ? styles.badgeBad
+                : styles.badgeUnknown;
 
-              <div className={styles.cardResult}>
-                <div className={styles.resultLabel}>Result :</div>
-                <div className={styles.resultValue}>
-                  {c.result}
-                  {typeof c.percent === "number" ? (
-                    <span className={styles.percent}> — {clampPercent(c.percent)}%</span>
-                  ) : null}
+            return (
+              <div key={c.title} className={styles.card}>
+                <div className={styles.cardTitle}>{c.title}</div>
+
+                <div className={`${styles.badge} ${badgeClass}`}>
+                  {badgeText(meta)}
                 </div>
-              </div>
 
-              <div className={styles.cardMeta}>{c.meta}</div>
-            </div>
-          ))}
+                <div className={styles.cardResult}>
+                  <div className={styles.resultLabel}>Result</div>
+                  <div className={styles.resultValue}>
+                    {c.result}
+                    {typeof c.percent === "number" ? (
+                      <span className={styles.percent}> — {clampPercent(c.percent)}%</span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className={styles.cardMeta}>{meta}</div>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>

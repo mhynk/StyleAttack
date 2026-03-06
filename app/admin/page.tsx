@@ -4,30 +4,30 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { useRouter } from "next/navigation";
 
-const STORAGE_KEY = "styleattack_history_v3";
-const COLLAPSE_KEY = "styleattack_sidebar_collapsed_v3";
+const STORAGE_KEY = "styleattack_admin_history_v1";
+const COLLAPSE_KEY = "styleattack_admin_sidebar_collapsed_v1";
 
-const STYLE_OPTIONS = [
-  "Original",
-  "Poetic",
-  "Narrative",
-  "Metaphor",
-];
+type StyleRow = {
+  id: string;
+  name: string;
+};
 
-export default function Page() {
+export default function AdminPage() {
   const router = useRouter();
+
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-
-  // history filter
   const [filter, setFilter] = useState("");
 
-  // keep style selector
-  const [style, setStyle] = useState(STYLE_OPTIONS[0]);
+  const [style, setStyle] = useState("");
+  const [stylesList, setStylesList] = useState<StyleRow[]>([]);
+  const [loadingStyles, setLoadingStyles] = useState(true);
 
-  // load from localStorage (once)
+  const [newStyle, setNewStyle] = useState("");
+  const [message, setMessage] = useState("");
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -40,7 +40,6 @@ export default function Page() {
     }
   }, []);
 
-  // persist history
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
@@ -49,7 +48,6 @@ export default function Page() {
     }
   }, [history]);
 
-  // persist collapsed state
   useEffect(() => {
     try {
       localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
@@ -58,9 +56,32 @@ export default function Page() {
     }
   }, [collapsed]);
 
+  async function loadStyles() {
+    setLoadingStyles(true);
+    try {
+      const res = await fetch("/api/styles", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load styles");
+
+      const data = await res.json();
+      setStylesList(Array.isArray(data) ? data : []);
+
+      if (Array.isArray(data) && data.length > 0) {
+        setStyle((prev) => prev || data[0].name);
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage("Failed to load styles");
+    } finally {
+      setLoadingStyles(false);
+    }
+  }
+
+  useEffect(() => {
+    loadStyles();
+  }, []);
+
   const canSubmit = useMemo(() => prompt.trim().length > 0, [prompt]);
 
-  // filtered view (does not change stored history order)
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return history.map((item, idx) => ({ item, idx }));
@@ -74,18 +95,13 @@ export default function Page() {
     const v = prompt.trim();
     if (!v) return;
 
-    //나중에 백엔드 연결하고 얘는 삭제해야함!!!
-    //router.push(`/result?prompt_id=123&style=${encodeURIComponent(style)}`);
-    //return;
-  
-    // history 저장
     setHistory((prev) => {
       const next = [v, ...prev.filter((x) => x !== v)];
       return next.slice(0, 50);
     });
-  
+
     setActiveIndex(0);
-  
+
     try {
       const res = await fetch("/api/run", {
         method: "POST",
@@ -97,24 +113,22 @@ export default function Page() {
           style: style,
         }),
       });
-  
+
       if (!res.ok) {
         const msg = await res.text();
         alert(`Run failed (${res.status}): ${msg}`);
         return;
       }
-  
+
       const data = await res.json();
-  
       const prompt_id = data.prompt_id;
-  
-      // 결과 페이지 이동
-      router.push(`/result?prompt_id=${prompt_id}&style=${style}`);
+
+      router.push(`/result?prompt_id=${prompt_id}&style=${encodeURIComponent(style)}`);
     } catch (err) {
       console.error(err);
       alert("Something went wrong");
     }
-  
+
     setPrompt("");
   }
 
@@ -137,9 +151,56 @@ export default function Page() {
     });
   }
 
+  async function handleAddStyle() {
+    const name = newStyle.trim();
+    if (!name) return;
+
+    try {
+      const res = await fetch("/api/styles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        alert(`Add failed (${res.status}): ${msg}`);
+        return;
+      }
+
+      setNewStyle("");
+      setMessage(`Added "${name}"`);
+      await loadStyles();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add style");
+    }
+  }
+
+  async function handleDeleteStyle(id: string, name: string) {
+    try {
+      const res = await fetch(`/api/styles/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        alert(`Delete failed (${res.status}): ${msg}`);
+        return;
+      }
+
+      setMessage(`Deleted "${name}"`);
+      await loadStyles();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete style");
+    }
+  }
+
   return (
     <div className={styles.container}>
-      {/* Sidebar */}
       <aside
         className={`${styles.sidebar} ${
           collapsed ? styles.sidebarCollapsed : ""
@@ -167,7 +228,6 @@ export default function Page() {
 
         {!collapsed && (
           <>
-            {/* Filter input */}
             <div className={styles.filterWrap}>
               <input
                 className={styles.filterInput}
@@ -217,16 +277,14 @@ export default function Page() {
         )}
       </aside>
 
-      {/* Main */}
       <main className={styles.main}>
-
-      <div className={styles.mainHeader}>
-        <div className={styles.logoTitle}>StyleAttack</div>
-        <div className={styles.logoSub}>
-          sponsored by <span className={styles.logoSponsor}>Ada Analytics</span>
+        <div className={styles.mainHeader}>
+          <div className={styles.logoTitle}>StyleAttack Admin</div>
+          <div className={styles.logoSub}>
+            sponsored by <span className={styles.logoSponsor}>Ada Analytics</span>
+          </div>
         </div>
-      </div>
-      
+
         <h1 className={styles.title}>Enter your Prompt.</h1>
 
         <div className={styles.inputRow}>
@@ -243,17 +301,17 @@ export default function Page() {
             }}
           />
 
-          {/* style selector kept */}
           <select
             className={styles.select}
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             aria-label="Style"
             title="Style"
+            disabled={loadingStyles}
           >
-            {STYLE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+            {stylesList.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
               </option>
             ))}
           </select>
@@ -265,6 +323,44 @@ export default function Page() {
           >
             Click
           </button>
+        </div>
+
+        <div className={styles.adminPanel}>
+          <h2 className={styles.adminTitle}>Manage Styles</h2>
+
+          {message && <div className={styles.adminMessage}>{message}</div>}
+
+          <div className={styles.adminRow}>
+            <input
+              className={styles.adminInput}
+              value={newStyle}
+              placeholder="Add new style..."
+              onChange={(e) => setNewStyle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddStyle();
+                }
+              }}
+            />
+            <button className={styles.adminAddButton} onClick={handleAddStyle}>
+              Add
+            </button>
+          </div>
+
+          <div className={styles.styleList}>
+            {stylesList.map((s) => (
+              <div key={s.id} className={styles.styleRow}>
+                <span>{s.name}</span>
+                <button
+                  className={styles.styleDeleteButton}
+                  onClick={() => handleDeleteStyle(s.id, s.name)}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </main>
     </div>

@@ -1,100 +1,285 @@
-.frame {
-  min-height: 100vh;
-  border: 6px solid #111;
-  background: #fff;
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
-
-.header {
-  padding: 18px;
-}
-
-.logo {
-  display: inline-block;
-  border: 2px solid #333;
-  padding: 10px 16px;
-  font-weight: 700;
-  font-size: 22px;
-}
-
-.center {
-  display: grid;
-  place-items: center;
-  padding: 40px 18px;
-}
-
-.title {
-  margin: 0 0 22px 0;
-  font-size: 20px;
-  font-weight: 500;
-}
-
-.inputRow {
-  width: min(760px, 92vw);
-  display: grid;
-  grid-template-columns: 1fr 220px;
-  gap: 0;
-  align-items: stretch;
-  border: 2px solid #333;
-  overflow: hidden;
-  background: #fff;
-}
-
-.textarea {
-  resize: none;
-  height: 140px;
-  padding: 18px;
-  border: 0;
-  outline: none;
-  font-size: 22px;
-}
-
-.sideControls {
-  display: grid;
-  grid-template-rows: 1fr 64px; /* 위: select, 아래: 버튼 */
-  border-left: 2px solid #333;
-  min-width: 0;                 /* grid overflow 방지 */
-}
-
-.selectLabel {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-}
-
-.selectHint {
-  font-size: 12px;
-  color: #444;
-}
-
-.select {
-  border: 2px solid #333;
-  padding: 6px 8px;
-  font-size: 14px;
-  background: #fff;
-}
-
-.goButton {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-top: 2px solid #333;
-  background: #fff;
-  color: #000;
-  font-size: 16px;        /* 텍스트용 */
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  text-transform: uppercase; /* CLICK */
-}
-
-.goButton:hover {
-  background: #f5f5f5;
+/* 전체 레이아웃 */
+.container {
+  display: flex;
+  height: 100vh;
+  background: #0f0f0f;
   color: #fff;
 }
 
+/* 사이드바 */
+.sidebar {
+  width: 280px;
+  background: #151515;
+  border-right: 1px solid #242424;
+  display: flex;
+  flex-direction: column;
+  transition: width 160ms ease;
+}
+
+.sidebarCollapsed {
+  width: 56px;
+}
+
+/* 사이드바 상단 */
+.sidebarTop {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid #242424;
+}
+
+.collapseBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background: #1b1b1b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.collapseBtn:hover {
+  background: #222;
+}
+
+.sidebarTitle {
+  font-size: 13px;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.clearBtn {
+  margin-left: auto;
+  font-size: 12px;
+  border: 1px solid #2a2a2a;
+  background: #1b1b1b;
+  color: #ddd;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background: #222;
+}
+
+/* filter */
+.filterWrap {
+  padding: 10px 10px 0 10px;
+}
+
+.filterInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  background: #1b1b1b;
+  color: #fff;
+  outline: none;
+  font-size: 13px;
+}
+
+.filterInput::placeholder {
+  color: #7a7a7a;
+}
+
+.filterInput:focus {
+  border-color: #3a3a3a;
+}
+
+/* 기록 리스트 */
+.historyList {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.emptyHint {
+  padding: 10px;
+  font-size: 13px;
+  color: #9a9a9a;
+}
+
+/* 한 줄(row) = 텍스트 + 삭제 버튼 */
+.historyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 2px;
+  border-radius: 12px;
+}
+
+/* 선택된 항목 하이라이트 */
+.historyRowActive {
+  background: #232323;
+  outline: 1px solid #2f2f2f;
+}
+
+.historyItem {
+  flex: 1;
+  min-width: 0;
+
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: #eaeaea;
+  padding: 10px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.historyRow:hover .historyItem {
+  background: #1f1f1f;
+}
+
+/* 삭제 버튼 */
+.deleteBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background: #1b1b1b;
+  color: #d8d8d8;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.deleteBtn:hover {
+  background: #262626;
+  color: #ffffff;
+}
+
+/* 메인 */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 26px;
+  padding: 0 20px;
+
+  position: relative;
+}
+
+/* 메인 왼쪽 위 로고 */
+
+.mainHeader {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+}
+
+.logoTitle {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.logoSub {
+  font-size: 11px;
+  color: #7a7a7a;
+}
+
+.logoSponsor {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.title {
+  font-size: 34px;
+  font-weight: 500;
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* 입력 바 */
+.inputRow {
+  width: 100%;
+  max-width: 720px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 28px;
+  padding: 12px 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  box-sizing: border-box;
+}
+
+.textarea {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+  height: 24px;
+  max-height: 140px;
+}
+
+.textarea::placeholder {
+  color: #7a7a7a;
+}
+
+/* ✅ style select (kept) */
+.select {
+  border: 1px solid #2a2a2a;
+  background: #1b1b1b;
+  color: #fff;
+  border-radius: 14px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.select:focus {
+  border-color: #3a3a3a;
+}
+
+.goButton {
+  border: 0;
+  border-radius: 18px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  color: #000;
+}
+
+.goButton:hover {
+  background: #e7e7e7;
+}
+
 .goButton:disabled {
-  opacity: 0.35;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 반응형 */
+@media (max-width: 720px) {
+  .sidebar {
+    width: 200px;
+  }
+  .sidebarCollapsed {
+    width: 52px;
+  }
+  .title {
+    font-size: 28px;
+  }
 }
