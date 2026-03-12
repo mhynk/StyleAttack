@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "./page.module.css";
+import { useRouter } from "next/navigation";
 
-type ApiItem = {
-  type: string;
-  label?: string;
-  error?: string;
-};
-
-type ApiResponse = {
+type ResultItem = {
+  id: number;
   prompt_id: number;
-  results: ApiItem[];
+  transformation_id?: number | null;
+  model: string;
+  response_text: string;
+  label: string; // refused | partial | complied
+  created_at?: string;
 };
 
 type Card = {
@@ -30,33 +30,43 @@ function labelToCard(label?: string): { result: Card["result"]; meta: string } {
 
 export default function ResultsPage() {
   const sp = useSearchParams();
-  const prompt = (sp.get("prompt") ?? "").trim();
-  const selectedStyle = (sp.get("style") ?? "Poetry").trim();
-
+  const promptId = sp.get("prompt_id");
+  const selectedStyle = (sp.get("style") ?? "").trim();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
 
   const API_BASE = "http://127.0.0.1:8000";
 
+     function handleBack() {
+      router.back();
+    }
+
+ function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem("token");
+  const headers: Record<string, string> = {};
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
   useEffect(() => {
-    if (!prompt) return;
+    if (!promptId) return;
 
     let cancelled = false;
 
-    async function run() {
+    async function loadResults() {
       setLoading(true);
       setError("");
 
       try {
-        const res = await fetch(`${API_BASE}/api/run_by_text`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: prompt,
-            category: "test",
-            styles: ["poetry", "metaphor", "narrative"],
-          }),
+        const res = await fetch(`${API_BASE}/api/result/${promptId}`, {
+          method: "GET",
+          headers: getAuthHeaders(),
         });
 
         if (!res.ok) {
@@ -64,43 +74,30 @@ export default function ResultsPage() {
           throw new Error(`Backend ${res.status}: ${msg}`);
         }
 
-        const data: ApiResponse = await res.json();
-        const map = new Map<string, ApiItem>();
-        for (const r of data.results ?? []) map.set(r.type, r);
+        const data: ResultItem[] = await res.json();
 
-        const baseline = map.get("baseline");
-        const poetry = map.get("poetry");
-        const metaphor = map.get("metaphor");
-        const narrative = map.get("narrative");
+        // 约定：transformation_id === null 表示 baseline
+        const baseline = data.find((item) => item.transformation_id == null);
+
+        // 这里只展示 baseline + 选中的 style
+        const selected = data.find((item) => item.transformation_id != null);
 
         const nextCards: Card[] = [
           {
             title: "Baseline Prompt",
-            ...(baseline?.error
-              ? { result: "Error", meta: baseline.error }
-              : labelToCard(baseline?.label)),
+            ...labelToCard(baseline?.label),
           },
           {
-            title: "Poetry Style",
-            ...(poetry?.error
-              ? { result: "Error", meta: poetry.error }
-              : labelToCard(poetry?.label)),
-          },
-          {
-            title: "Metaphor Style",
-            ...(metaphor?.error
-              ? { result: "Error", meta: metaphor.error }
-              : labelToCard(metaphor?.label)),
-          },
-          {
-            title: "Narrative Style",
-            ...(narrative?.error
-              ? { result: "Error", meta: narrative.error }
-              : labelToCard(narrative?.label)),
+            title: selectedStyle
+              ? `${selectedStyle.charAt(0).toUpperCase()}${selectedStyle.slice(1)} Style`
+              : "Selected Style",
+            ...labelToCard(selected?.label),
           },
         ];
 
-        if (!cancelled) setCards(nextCards);
+        if (!cancelled) {
+          setCards(nextCards);
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Unknown error");
       } finally {
@@ -108,12 +105,12 @@ export default function ResultsPage() {
       }
     }
 
-    run();
+    loadResults();
 
     return () => {
       cancelled = true;
     };
-  }, [prompt]);
+  }, [promptId, selectedStyle]);
 
   return (
     <div className={styles.frame}>
@@ -124,27 +121,23 @@ export default function ResultsPage() {
       <section className={styles.body}>
         <p className={styles.desc}>
           This shows whether the AI bypassed the LLM&apos;s safety mechanisms after the input prompt
-          was transformed into different styles.
-        </p >
+          was transformed into the selected style.
+        </p>
 
         <div className={styles.metaRow}>
           <div className={styles.metaChip}>
-            <span className={styles.metaLabel}>Selected style</span>
-            <span className={styles.metaValue}>{selectedStyle}</span>
+            <span className={styles.metaLabel}>Prompt ID</span>
+            <span className={styles.metaValue}>{promptId ?? "-"}</span>
           </div>
 
-          {prompt && (
-            <div className={styles.metaChip}>
-              <span className={styles.metaLabel}>Prompt</span>
-              <span className={styles.metaValue} title={prompt}>
-                {prompt.length > 48 ? prompt.slice(0, 48) + "…" : prompt}
-              </span>
-            </div>
-          )}
+          <div className={styles.metaChip}>
+            <span className={styles.metaLabel}>Selected style</span>
+            <span className={styles.metaValue}>{selectedStyle || "-"}</span>
+          </div>
         </div>
 
-        {loading ? <p className={styles.desc}>Running…</p > : null}
-        {error ? <p className={styles.desc}>Error: {error}</p > : null}
+        {loading ? <p className={styles.desc}>Loading results…</p> : null}
+        {error ? <p className={styles.desc}>Error: {error}</p> : null}
 
         <div className={styles.cards}>
           {cards.map((c) => (
@@ -160,6 +153,11 @@ export default function ResultsPage() {
             </div>
           ))}
         </div>
+            <button
+              className={styles.backButton}
+              onClick={handleBack}
+            >
+              ← Back to Home</button>
       </section>
     </div>
   );

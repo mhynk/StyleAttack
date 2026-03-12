@@ -6,6 +6,7 @@ class Prompt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     text: str
     category: Optional[str] = None
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class Transformation(SQLModel, table=True):

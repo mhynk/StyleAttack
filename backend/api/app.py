@@ -268,12 +268,18 @@ def create_prompt(body: PromptCreate, current_user: User = Depends(require_resea
         return p
 
 
-@app.get("/api/prompt")
-def get_prompt(current_user: User = Depends(require_researcher_or_admin)):
+@app.post("/api/prompt")
+def create_prompt(body: PromptCreate, current_user: User = Depends(require_researcher_or_admin)):
     with get_session() as session:
-        return session.exec(
-            select(Prompt).order_by(Prompt.created_at.desc())
-        ).all()
+        p = Prompt(
+            text=body.text,
+            category=body.category,
+            user_id=current_user.id
+        )
+        session.add(p)
+        session.commit()
+        session.refresh(p)
+        return p
 
 
 class RunByTextRequest(BaseModel):
@@ -301,6 +307,15 @@ Original prompt:
     rewritten = await call_ollama(OLLAMA_MODEL, rewrite_prompt)
     return rewritten.strip()
 
+@app.get("/api/history")
+def get_history(current_user: User = Depends(require_researcher_or_admin)):
+    with get_session() as session:
+        prompts = session.exec(
+            select(Prompt)
+            .where(Prompt.user_id == current_user.id)
+            .order_by(Prompt.created_at.desc())
+        ).all()
+        return prompts
 
 @app.post("/api/run_by_text")
 async def run_by_text(
@@ -311,7 +326,7 @@ async def run_by_text(
         raise HTTPException(status_code=400, detail="text is required")
 
     with get_session() as session:
-        p = Prompt(text=body.text.strip(), category=body.category)
+        p = Prompt(text=body.text.strip(), category=body.category, user_id=current_user.id)
         session.add(p)
         session.commit()
         session.refresh(p)
