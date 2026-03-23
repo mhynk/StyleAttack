@@ -1,150 +1,162 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type Props = {
-  searchParams: { prompt_id?: string; style?: string };
-};
-
-function clampPercent(n: number) {
-  return Math.max(0, Math.min(100, n));
-}
-
-type DbResult = {
+type ResultRow = {
   id: number;
   prompt_id: number;
-  transformation_id: number | null;
-  label: string; // "Blocked" | "Bypassed" etc.
+  prompt_text: string;
+  category?: string;
+  transformation_id?: number | null;
+  style: string;
+  transformed_text: string;
+  model: string;
+  response_text: string;
+  label: string;
+  created_at?: string;
 };
 
-type Card = {
-  title: string;
-  result: string;
-  percent?: number;
-  meta: string;
-};
+export default function ResultsPage() {
+  const [results, setResults] = useState<ResultRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-function labelToMeta(label: string) {
-  const low = label.toLowerCase();
-  if (low.includes("block")) return "Successful Defense";
-  if (low.includes("bypass")) return "Defense Failure";
-  return "Unknown";
-}
+  const API_BASE = "http://127.0.0.1:8000";
 
-function labelToBadge(label: string): "ok" | "bad" | "unknown" {
-  const low = label.toLowerCase();
-  if (low.includes("block")) return "ok";
-  if (low.includes("bypass")) return "bad";
-  return "unknown";
-}
+  function getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem("token");
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
 
-function badgeText(meta: string) {
-  if (meta === "Successful Defense") return "Defense OK";
-  if (meta === "Defense Failure") return "Bypass";
-  return "Unknown";
-}
+  async function loadResults() {
+    try {
+      setLoading(true);
+      setError("");
 
-export default async function ResultsPage({ searchParams }: Props) {
-  const promptIdStr = searchParams.prompt_id ?? "";
-  const prompt_id = Number(promptIdStr);
-  const selectedStyle = (searchParams.style ?? "Poetry").trim();
+      const res = await fetch(`${API_BASE}/api/results`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
 
-  let cards: Card[] = [];
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(`Backend ${res.status}: ${msg}`);
+      }
 
-  if (!prompt_id || Number.isNaN(prompt_id)) {
-    cards = [{ title: "Error", result: "Missing prompt_id", meta: "Invalid URL" }];
-  } else {
-    // ✅ Next 프록시로 GET
-    const res = await fetch(`http://localhost:3000/api/result/${prompt_id}`, {
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const msg = await res.text();
-      cards = [{ title: "Error", result: "Failed to load", meta: msg }];
-    } else {
-      const data = (await res.json()) as DbResult[];
-
-      const baseline = data.find((r) => r.transformation_id === null);
-      const styled = data.filter((r) => r.transformation_id !== null);
-
-      cards = [
-        {
-          title: "Baseline Prompt",
-          result: baseline?.label ?? "N/A",
-          meta: baseline ? labelToMeta(baseline.label) : "No baseline result",
-        },
-        ...styled.map((r, idx) => ({
-          title: `Style Variant ${idx + 1}`,
-          result: r.label,
-          meta: labelToMeta(r.label),
-        })),
-      ];
+      const data = await res.json();
+      setResults(data);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load results");
+    } finally {
+      setLoading(false);
     }
   }
+
+  function handleExportCSV() {
+    const token = localStorage.getItem("token");
+    const url = `${API_BASE}/api/results/export/csv`;
+
+    fetch(url, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Export failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = "results_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+      })
+      .catch((err) => {
+        setError(err.message);
+      });
+  }
+
+  useEffect(() => {
+    loadResults();
+  }, []);
 
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
-        <div className={styles.logoWrap}>
-          <div className={styles.logo}>StyleAttack</div>
-          <div className={styles.sponsor}>
-            sponsored by <strong>Ada Analytics</strong>
-          </div>
-        </div>
+        <div className={styles.logo}>StyleAttack Results</div>
       </header>
 
       <section className={styles.body}>
         <p className={styles.desc}>
-          This shows outcomes for the baseline prompt and its style-transformed variants. Use the
-          results to assess whether the transformation increased or decreased safety bypass success.
+          This page shows saved database results and allows export.
         </p>
 
-        <div className={styles.metaRow}>
-          <div className={styles.metaChip}>
-            <span className={styles.metaLabel}>Selected style</span>
-            <span className={styles.metaValue}>{selectedStyle}</span>
-          </div>
-
-          <div className={styles.metaChip}>
-            <span className={styles.metaLabel}>Prompt ID</span>
-            <span className={styles.metaValue}>{prompt_id || "N/A"}</span>
-          </div>
+        <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+          <button className={styles.backButton} onClick={loadResults}>
+            Refresh
+          </button>
+          <button className={styles.backButton} onClick={handleExportCSV}>
+            Export CSV
+          </button>
         </div>
 
-        <div className={styles.cards}>
-          {cards.map((c) => {
-            const badgeKind = labelToBadge(c.result);
-            const meta = c.meta;
-            const badgeClass =
-              badgeKind === "ok"
-                ? styles.badgeOk
-                : badgeKind === "bad"
-                ? styles.badgeBad
-                : styles.badgeUnknown;
+        {loading && <p className={styles.desc}>Loading results...</p>}
+        {error && <p className={styles.desc}>Error: {error}</p>}
 
-            return (
-              <div key={c.title} className={styles.card}>
-                <div className={styles.cardTitle}>{c.title}</div>
-
-                <div className={`${styles.badge} ${badgeClass}`}>
-                  {badgeText(meta)}
-                </div>
-
-                <div className={styles.cardResult}>
-                  <div className={styles.resultLabel}>Result</div>
-                  <div className={styles.resultValue}>
-                    {c.result}
-                    {typeof c.percent === "number" ? (
-                      <span className={styles.percent}> — {clampPercent(c.percent)}%</span>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className={styles.cardMeta}>{meta}</div>
-              </div>
-            );
-          })}
-        </div>
+        {!loading && !error && (
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Result ID</th>
+                  <th style={thStyle}>Prompt ID</th>
+                  <th style={thStyle}>Style</th>
+                  <th style={thStyle}>Label</th>
+                  <th style={thStyle}>Model</th>
+                  <th style={thStyle}>Prompt</th>
+                  <th style={thStyle}>Response</th>
+                  <th style={thStyle}>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((row) => (
+                  <tr key={row.id}>
+                    <td style={tdStyle}>{row.id}</td>
+                    <td style={tdStyle}>{row.prompt_id}</td>
+                    <td style={tdStyle}>{row.style}</td>
+                    <td style={tdStyle}>{row.label}</td>
+                    <td style={tdStyle}>{row.model}</td>
+                    <td style={tdStyle}>{row.prompt_text}</td>
+                    <td style={tdStyle}>{row.response_text}</td>
+                    <td style={tdStyle}>
+                      {row.created_at ? new Date(row.created_at).toLocaleString() : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
 }
+
+const thStyle = {
+  border: "1px solid #ccc",
+  padding: "10px",
+  textAlign: "left" as const,
+  background: "#f3f4f6",
+};
+
+const tdStyle = {
+  border: "1px solid #ccc",
+  padding: "10px",
+  verticalAlign: "top" as const,
+};
