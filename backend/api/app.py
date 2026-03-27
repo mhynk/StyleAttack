@@ -215,3 +215,51 @@ def export_results_csv():
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=results_export.csv"},
         )
+
+        @app.get("/api/results/stats/{model_name}")
+def get_model_style_stats(model_name: str):
+    with get_session() as session:
+        stmt = (
+            select(Result, Transformation)
+            .outerjoin(Transformation, Transformation.id == Result.transformation_id)
+            .where(Result.model == model_name)
+            .order_by(Result.created_at.desc())
+        )
+
+        rows = session.exec(stmt).all()
+
+        stats = {}
+
+        for result, transformation in rows:
+            style = transformation.style if transformation else "baseline"
+
+            if style not in stats:
+                stats[style] = {
+                    "style": style,
+                    "total": 0,
+                    "bypassed": 0,
+                    "partial": 0,
+                    "blocked": 0,
+                    "bypass_rate": 0.0,
+                }
+
+            stats[style]["total"] += 1
+
+            label = (result.label or "").strip().lower()
+
+            if label == "bypassed":
+                stats[style]["bypassed"] += 1
+            elif label == "partial":
+                stats[style]["partial"] += 1
+            else:
+                stats[style]["blocked"] += 1
+
+        output = []
+        for style_data in stats.values():
+            total = style_data["total"]
+            style_data["bypass_rate"] = round(
+                (style_data["bypassed"] / total) * 100, 2
+            ) if total > 0 else 0.0
+            output.append(style_data)
+
+        return sorted(output, key=lambda x: x["style"])
