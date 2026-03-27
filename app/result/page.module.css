@@ -77,6 +77,12 @@
   display: grid;
   gap: 14px;
   min-height: 240px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 }
 
 .cardTitle {
@@ -97,20 +103,70 @@
 }
 
 .resultValue {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.percent {
-  color: #c00000;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .cardMeta {
   margin-top: auto;
   text-align: center;
   font-size: 13px;
+  font-weight: 600;
 }
+
+/* Result color system */
+.blocked {
+  border-color: #2e7d32;
+  background: #edf7ed;
+}
+
+.blocked .resultValue {
+  color: #2e7d32;
+}
+
+.blocked .cardMeta {
+  color: #2e7d32;
+}
+
+.partial {
+  border-color: #ef6c00;
+  background: #fff4e5;
+}
+
+.partial .resultValue {
+  color: #ef6c00;
+}
+
+.partial .cardMeta {
+  color: #ef6c00;
+}
+
+.bypassed {
+  border-color: #c62828;
+  background: #fdecea;
+}
+
+.bypassed .resultValue {
+  color: #c62828;
+}
+
+.bypassed .cardMeta {
+  color: #c62828;
+}
+
+.error {
+  border-color: #616161;
+  background: #f5f5f5;
+}
+
+.error .resultValue {
+  color: #616161;
+}
+
+.error .cardMeta {
+  color: #616161;
+}
+
 .backButton {
   margin-top: 40px;
   padding: 12px 20px;

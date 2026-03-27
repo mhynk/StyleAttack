@@ -1,104 +1,160 @@
 .frame {
   min-height: 100vh;
-  border: 6px solid #111;
-  background: #fff;
+  background: #0f0f0f;
+  color: #fff;
   display: grid;
   grid-template-rows: auto 1fr;
 }
 
 .header {
-  padding: 18px;
+  padding: 24px;
 }
 
 .logo {
   display: inline-block;
-  border: 2px solid #333;
-  padding: 10px 16px;
   font-weight: 700;
   font-size: 22px;
+  letter-spacing: 0.4px;
+  color: #fff;
 }
 
 .center {
   display: grid;
   place-items: center;
-  padding: 40px 18px;
+  padding: 40px 20px;
 }
 
 .title {
   margin: 0 0 22px 0;
-  font-size: 20px;
+  font-size: 34px;
   font-weight: 500;
+  opacity: 0.9;
+  text-align: center;
 }
 
 .inputRow {
   width: min(760px, 92vw);
   display: grid;
   grid-template-columns: 1fr 220px;
-  gap: 0;
   align-items: stretch;
-  border: 2px solid #333;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 28px;
   overflow: hidden;
-  background: #fff;
+  box-sizing: border-box;
 }
 
 .textarea {
   resize: none;
   height: 140px;
-  padding: 18px;
+  padding: 18px 20px;
   border: 0;
   outline: none;
-  font-size: 22px;
+  font-size: 16px;
+  line-height: 1.5;
+  background: transparent;
+  color: #fff;
+}
+
+.textarea::placeholder {
+  color: #7a7a7a;
 }
 
 .sideControls {
   display: grid;
-  grid-template-rows: 1fr 64px; /* 위: select, 아래: 버튼 */
-  border-left: 2px solid #333;
-  min-width: 0;                 /* grid overflow 방지 */
+  grid-template-rows: 1fr 64px;
+  border-left: 1px solid #2a2a2a;
+  min-width: 0;
+  background: #181818;
+}
+
+.selectGroup {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  align-content: start;
 }
 
 .selectLabel {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  align-content: start;
 }
 
 .selectHint {
   font-size: 12px;
-  color: #444;
+  color: #9a9a9a;
 }
 
 .select {
-  border: 2px solid #333;
-  padding: 6px 8px;
-  font-size: 14px;
-  background: #fff;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
+  background: #1b1b1b;
+  color: #fff;
+  outline: none;
+}
+
+.select:focus {
+  border-color: #3a3a3a;
 }
 
 .goButton {
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 14px);
+  height: 46px;
+  margin: 0 7px 9px 7px;
   border: 0;
-  border-top: 2px solid #333;
+  border-radius: 18px;
   background: #fff;
   color: #000;
-  font-size: 16px;        /* 텍스트용 */
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  text-transform: uppercase; /* CLICK */
+  text-transform: none;
 }
 
 .goButton:hover {
-  background: #f5f5f5;
-  color: #fff;
+  background: #e7e7e7;
+  color: #000;
 }
 
 .goButton:disabled {
-  opacity: 0.35;
+  opacity: 0.5;
   cursor: not-allowed;
 }
+
 .message {
   margin-bottom: 12px;
   text-align: center;
+  font-size: 13px;
+  color: #b8b8b8;
+}
+
+@media (max-width: 720px) {
+  .title {
+    font-size: 28px;
+  }
+
+  .inputRow {
+    grid-template-columns: 1fr;
+    border-radius: 24px;
+  }
+
+  .sideControls {
+    border-left: 0;
+    border-top: 1px solid #2a2a2a;
+    grid-template-rows: auto auto;
+    padding-bottom: 10px;
+  }
+
+  .textarea {
+    height: 120px;
+  }
+
+  .goButton {
+    width: calc(100% - 28px);
+    margin: 0 14px 4px 14px;
+  }
 }

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { useRouter } from "next/navigation";
 
 type ResultItem = {
   id: number;
@@ -22,10 +21,38 @@ type Card = {
 };
 
 function labelToCard(label?: string): { result: Card["result"]; meta: string } {
-  if (label === "refused") return { result: "Blocked", meta: "Successful Defense" };
-  if (label === "partial") return { result: "Partial", meta: "Partial / Weak Defense" };
-  if (label === "complied") return { result: "Bypassed", meta: "Defense Failure" };
-  return { result: "Error", meta: label ?? "Unknown label" };
+  if (label === "refused") {
+    return {
+      result: "Blocked",
+      meta: "Successfully blocked or defended",
+    };
+  }
+
+  if (label === "partial") {
+    return {
+      result: "Partial",
+      meta: "Partial / ambiguous response",
+    };
+  }
+
+  if (label === "complied") {
+    return {
+      result: "Bypassed",
+      meta: "Safety bypassed",
+    };
+  }
+
+  return {
+    result: "Error",
+    meta: label ?? "Unknown label",
+  };
+}
+
+function getResultClass(result: Card["result"]) {
+  if (result === "Blocked") return styles.blocked;
+  if (result === "Partial") return styles.partial;
+  if (result === "Bypassed") return styles.bypassed;
+  return styles.error;
 }
 
 export default function ResultsPage() {
@@ -33,26 +60,27 @@ export default function ResultsPage() {
   const promptId = sp.get("prompt_id");
   const selectedStyle = (sp.get("style") ?? "").trim();
   const router = useRouter();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
 
   const API_BASE = "http://127.0.0.1:8000";
 
-     function handleBack() {
-      router.back();
-    }
-
- function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem("token");
-  const headers: Record<string, string> = {};
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  function handleBack() {
+    router.back();
   }
 
-  return headers;
-}
+  function getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem("token");
+    const headers: Record<string, string> = {};
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
 
   useEffect(() => {
     if (!promptId) return;
@@ -76,10 +104,7 @@ export default function ResultsPage() {
 
         const data: ResultItem[] = await res.json();
 
-        // 约定：transformation_id === null 表示 baseline
         const baseline = data.find((item) => item.transformation_id == null);
-
-        // 这里只展示 baseline + 选中的 style
         const selected = data.find((item) => item.transformation_id != null);
 
         const nextCards: Card[] = [
@@ -120,8 +145,8 @@ export default function ResultsPage() {
 
       <section className={styles.body}>
         <p className={styles.desc}>
-          This shows whether the AI bypassed the LLM&apos;s safety mechanisms after the input prompt
-          was transformed into the selected style.
+          This shows whether the AI bypassed the LLM&apos;s safety mechanisms after
+          the input prompt was transformed into the selected style.
         </p>
 
         <div className={styles.metaRow}>
@@ -141,7 +166,10 @@ export default function ResultsPage() {
 
         <div className={styles.cards}>
           {cards.map((c) => (
-            <div key={c.title} className={styles.card}>
+            <div
+              key={c.title}
+              className={`${styles.card} ${getResultClass(c.result)}`}
+            >
               <div className={styles.cardTitle}>{c.title}</div>
 
               <div className={styles.cardResult}>
@@ -153,11 +181,10 @@ export default function ResultsPage() {
             </div>
           ))}
         </div>
-            <button
-              className={styles.backButton}
-              onClick={handleBack}
-            >
-              ← Back to Home</button>
+
+        <button className={styles.backButton} onClick={handleBack}>
+          ← Back to Home
+        </button>
       </section>
     </div>
   );

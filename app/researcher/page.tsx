@@ -16,10 +16,16 @@ export default function PromptPage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gpt-4");
   const [stylesList, setStylesList] = useState<StyleOption[]>([]);
   const [loadingStyles, setLoadingStyles] = useState(true);
   const [message, setMessage] = useState("");
 
+  const modelOptions = [
+    { value: "gpt-4", label: "GPT-4" },
+    { value: "claude-3", label: "Claude 3" },
+    { value: "llama-3", label: "Llama 3" },
+  ];
   const canSubmit = useMemo(
     () => prompt.trim().length > 0 && style.trim().length > 0,
     [prompt, style]
@@ -84,6 +90,7 @@ export default function PromptPage() {
           text: prompt.trim(),
           category: "test",
           styles: [style],
+          model: selectedModel,
         }),
       });
 
@@ -96,7 +103,7 @@ export default function PromptPage() {
       const data = await res.json();
 
       router.push(
-        `/result?prompt_id=${data.prompt_id}&style=${encodeURIComponent(style)}`
+        `/result?prompt_id=${data.prompt_id}&style=${encodeURIComponent(style)}&model=${encodeURIComponent(selectedModel)}`
       );
     } catch (err) {
       console.error(err);
@@ -129,14 +136,15 @@ export default function PromptPage() {
             }}
           />
 
-          <div className={styles.sideControls}>
+        <div className={styles.sideControls}>
+          <div className={styles.selectGroup}>
             <label className={styles.selectLabel}>
               <span className={styles.selectHint}>Style</span>
               <select
-                className={styles.select}
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-                disabled={loadingStyles}
+              className={styles.select}
+              value={style}
+              onChange={(e) => setStyle(e.target.value)}
+              disabled={loadingStyles}
               >
                 {stylesList.map((opt) => (
                   <option key={opt.id} value={opt.name}>
@@ -146,14 +154,30 @@ export default function PromptPage() {
               </select>
             </label>
 
-            <button
-              className={styles.goButton}
-              onClick={onSubmit}
-              disabled={!canSubmit}
-            >
-              Click
-            </button>
-          </div>
+            <label className={styles.selectLabel}>
+              <span className={styles.selectHint}>AI Model</span>
+              <select
+                className={styles.select}
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+              >
+                {modelOptions.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button
+          className={styles.goButton}
+          onClick={onSubmit}
+          disabled={!canSubmit}
+        >
+          Click
+        </button>
+        </div>
         </div>
       </section>
     </div>
