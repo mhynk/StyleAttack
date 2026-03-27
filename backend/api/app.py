@@ -8,7 +8,11 @@ from backend.db.dp import init_db, get_session
 from backend.db.model import Prompt, Result, Transformation
 from backend.services.ollama import call_ollama
 from backend.schemas import PromptCreate, RunRequest
-from backend.services.transforms import STYLE_FUNCS
+from backend.services.transforms import STYLE_FUNC
+
+from fastapi.responses import StreamingResponse
+import csv
+import io
 
 load_dotenv()
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
@@ -129,3 +133,133 @@ def get_result(prompt_id: int):
             Result.prompt_id == prompt_id
         ).order_by(Result.created_at.desc())
         return session.exec(stmt).all()
+
+        @app.get("/api/results")
+def get_all_results():
+    with get_session() as session:
+        stmt = (
+            select(Result, Prompt, Transformation)
+            .join(Prompt, Prompt.id == Result.prompt_id)
+            .outerjoin(Transformation, Transformation.id == Result.transformation_id)
+            .order_by(Result.created_at.desc())
+        )
+
+        rows = session.exec(stmt).all()
+
+        output = []
+        for result, prompt, transformation in rows:
+            output.append({
+                "id": result.id,
+                "prompt_id": result.prompt_id,
+                "prompt_text": prompt.text if prompt else "",
+                "category": prompt.category if prompt else "",
+                "transformation_id": result.transformation_id,
+                "style": transformation.style if transformation else "baseline",
+                "transformed_text": transformation.transformed_text if transformation else prompt.text,
+                "model": result.model,
+                "response_text": result.response_text,
+                "label": result.label,
+                "created_at": result.created_at,
+            })
+
+        return output
+
+        @app.get("/api/results/export/csv")
+def export_results_csv():
+    with get_session() as session:
+        stmt = (
+            select(Result, Prompt, Transformation)
+            .join(Prompt, Prompt.id == Result.prompt_id)
+            .outerjoin(Transformation, Transformation.id == Result.transformation_id)
+            .order_by(Result.created_at.desc())
+        )
+
+        rows = session.exec(stmt).all()
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+
+        writer.writerow([
+            "result_id",
+            "prompt_id",
+            "prompt_text",
+            "category",
+            "transformation_id",
+            "style",
+            "transformed_text",
+            "model",
+            "response_text",
+            "label",
+            "created_at",
+        ])
+
+        for result, prompt, transformation in rows:
+            writer.writerow([
+                result.id,
+                result.prompt_id,
+                prompt.text if prompt else "",
+                prompt.category if prompt else "",
+                result.transformation_id,
+                transformation.style if transformation else "baseline",
+                transformation.transformed_text if transformation else prompt.text,
+                result.model,
+                result.response_text,
+                result.label,
+                result.created_at,
+            ])
+
+        buffer.seek(0)
+
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=results_export.csv"},
+        )
+
+        @app.get("/api/results/stats/{model_name}")
+def get_model_style_stats(model_name: str):
+    with get_session() as session:
+        stmt = (
+            select(Result, Transformation)
+            .outerjoin(Transformation, Transformation.id == Result.transformation_id)
+            .where(Result.model == model_name)
+            .order_by(Result.created_at.desc())
+        )
+
+        rows = session.exec(stmt).all()
+
+        stats = {}
+
+        for result, transformation in rows:
+            style = transformation.style if transformation else "baseline"
+
+            if style not in stats:
+                stats[style] = {
+                    "style": style,
+                    "total": 0,
+                    "bypassed": 0,
+                    "partial": 0,
+                    "blocked": 0,
+                    "bypass_rate": 0.0,
+                }
+
+            stats[style]["total"] += 1
+
+            label = (result.label or "").strip().lower()
+
+            if label == "bypassed":
+                stats[style]["bypassed"] += 1
+            elif label == "partial":
+                stats[style]["partial"] += 1
+            else:
+                stats[style]["blocked"] += 1
+
+        output = []
+        for style_data in stats.values():
+            total = style_data["total"]
+            style_data["bypass_rate"] = round(
+                (style_data["bypassed"] / total) * 100, 2
+            ) if total > 0 else 0.0
+            output.append(style_data)
+
+        return sorted(output, key=lambda x: x["style"])
