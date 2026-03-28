@@ -72,6 +72,7 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("token", data.access_token);
+      document.cookie = `token=${data.access_token}; path=/`;
       localStorage.setItem("user", JSON.stringify(data.user));
 
       setMessage(`Login successful. Welcome, ${data.user.username}.`);

@@ -28,10 +28,17 @@ export default function AdminPage() {
   const [style, setStyle] = useState("");
   const [stylesList, setStylesList] = useState<StyleRow[]>([]);
   const [loadingStyles, setLoadingStyles] = useState(true);
+  const [selectedModel, setSelectedModel] = useState("gpt-4");
+  const modelOptions = [
+  { value: "gpt-4", label: "GPT-4" },
+  { value: "claude-3", label: "Claude 3" },
+  { value: "llama-3", label: "Llama 3" },
+];
 
   const [newStyle, setNewStyle] = useState("");
   const [newInstruction, setNewInstruction] = useState("");
   const [message, setMessage] = useState("");
+  const [running, setRunning] = useState(false);
 
   function getAuthHeaders(json = false) {
     const token = localStorage.getItem("token");
@@ -100,7 +107,13 @@ export default function AdminPage() {
     loadStyles();
     loadHistory();
   }, []);
-
+  useEffect(() => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // ignore
+  }
+}, [history]);
   const canSubmit = useMemo(
     () => prompt.trim().length > 0 && style.trim().length > 0,
     [prompt, style]
@@ -115,45 +128,23 @@ export default function AdminPage() {
       .filter(({ item }) => item.toLowerCase().includes(q));
   }, [history, filter]);
 
-  async function handleSubmit() {
-    const v = prompt.trim();
-    if (!v) return;
+   function handleSubmit() {
+  const v = prompt.trim();
+  if (!v) return;
 
-    setHistory((prev) => {
-      const next = [v, ...prev.filter((x) => x !== v)];
-      return next.slice(0, 50);
-    });
+  setHistory((prev) => {
+    const next = [v, ...prev.filter((x) => x !== v)];
+    return next.slice(0, 50);
+  });
 
-    setActiveIndex(0);
+  setActiveIndex(0);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/run_by_text`, {
-        method: "POST",
-        headers: getAuthHeaders(true),
-        body: JSON.stringify({
-          text: v,
-          category: "test",
-          styles: [style],
-        }),
-      });
+  router.push(
+  `/result?text=${encodeURIComponent(v)}&style=${encodeURIComponent(style)}&model=${encodeURIComponent(selectedModel)}`
+);
 
-      if (!res.ok) {
-        const msg = await res.text();
-        alert(`Run failed (${res.status}): ${msg}`);
-        return;
-      }
-
-      const data = await res.json();
-      const prompt_id = data.prompt_id;
-
-      router.push(`/result?prompt_id=${prompt_id}&style=${encodeURIComponent(style)}`);
-    } catch (err) {
-      console.error(err);
-      alert("Something went wrong");
-    }
-
-    setPrompt("");
-  }
+  setPrompt("");
+}
 
   function handlePick(item: string, originalIndex: number) {
     setPrompt(item);
@@ -250,6 +241,14 @@ export default function AdminPage() {
     }
   }
 
+
+  function handleBackToLogin() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      router.push("/");
+   }
+
   return (
     <div className={styles.container}>
       <aside
@@ -330,10 +329,16 @@ export default function AdminPage() {
 
       <main className={styles.main}>
         <div className={styles.mainHeader}>
-          <div className={styles.logoTitle}>StyleAttack Admin</div>
-          <div className={styles.logoSub}>
-            sponsored by <span className={styles.logoSponsor}>Ada Analytics</span>
+          <div>
+            <div className={styles.logoTitle}>StyleAttack Researcher</div>
+            <div className={styles.logoSub}>
+              sponsored by <span className={styles.logoSponsor}>Ada Analytics</span>
+            </div>
           </div>
+
+          <button className={styles.logoutButton} onClick={handleBackToLogin}>
+            Back to Login
+          </button>
         </div>
 
         <h1 className={styles.title}>Enter your Prompt.</h1>
@@ -352,28 +357,51 @@ export default function AdminPage() {
             }}
           />
 
-          <select
-            className={styles.select}
-            value={style}
-            onChange={(e) => setStyle(e.target.value)}
-            aria-label="Style"
-            title="Style"
-            disabled={loadingStyles}
-          >
-            {stylesList.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.display_name || s.name}
-              </option>
-            ))}
-          </select>
+          <div className={styles.sideControls}>
+            <div className={styles.selectGroup}>
+              <label className={styles.selectLabel}>
+                <span className={styles.selectHint}>Style</span>
+                <select
+                  className={styles.select}
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value)}
+                  aria-label="Style"
+                  title="Style"
+                  disabled={loadingStyles || running}
+                >
+                  {stylesList.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.display_name || s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <button
-            className={styles.goButton}
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-          >
-            Click
-          </button>
+              <label className={styles.selectLabel}>
+                <span className={styles.selectHint}>AI Model</span>
+                <select
+                  className={styles.select}
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={running}
+                >
+                  {modelOptions.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <button
+              className={styles.goButton}
+              onClick={handleSubmit}
+              disabled={!canSubmit || running}
+            >
+              {running ? "Processing..." : "Click"}
+            </button>
+          </div>
         </div>
 
         <div className={styles.adminPanel}>

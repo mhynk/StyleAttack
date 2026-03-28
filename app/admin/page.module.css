@@ -227,17 +227,43 @@
     color: #fff;
     font-size: 16px;
     outline: none;
-    resize: none;
     line-height: 1.4;
     height: 24px;
-    max-height: 140px;
+    min-height: 120px;
+    resize: vertical;
+    max-height: 300px;
   }
   
   .textarea::placeholder {
     color: #7a7a7a;
   }
-  
-  /* ✅ style select (kept) */
+
+  .mainHeader {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.logoutButton {
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: #1b1b1b;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.logoutButton:hover {
+  background: #262626;
+}
+
+  /* style select (kept) */
   .select {
     border: 1px solid #2a2a2a;
     background: #1b1b1b;
@@ -381,3 +407,29 @@
       font-size: 28px;
     }
   }
+
+.sideControls {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.selectGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.selectLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selectHint {
+  font-size: 12px;
+  color: #a0a0a0;
+  font-weight: 600;
+}

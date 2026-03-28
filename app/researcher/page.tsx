@@ -1,29 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
+import { useRouter } from "next/navigation";
 
+const STORAGE_KEY = "styleattack_researcher_history_v1";
+const COLLAPSE_KEY = "styleattack_researcher_sidebar_collapsed_v1";
 const API_BASE = "http://127.0.0.1:8000";
 
-type StyleOption = {
+type StyleRow = {
   id: number;
   name: string;
   display_name: string;
+  instruction: string;
+  is_active: boolean;
 };
 
-export default function PromptPage() {
+export default function ResearcherPage() {
   const router = useRouter();
-  const [prompt, setPrompt] = useState("");
-  const [style, setStyle] = useState("");
-  const [stylesList, setStylesList] = useState<StyleOption[]>([]);
-  const [loadingStyles, setLoadingStyles] = useState(true);
-  const [message, setMessage] = useState("");
 
-  const canSubmit = useMemo(
-    () => prompt.trim().length > 0 && style.trim().length > 0,
-    [prompt, style]
-  );
+  const [prompt, setPrompt] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [filter, setFilter] = useState("");
+
+  const [style, setStyle] = useState("");
+  const [stylesList, setStylesList] = useState<StyleRow[]>([]);
+  const [loadingStyles, setLoadingStyles] = useState(true);
+  const [selectedModel, setSelectedModel] = useState("gpt-4");
+  const modelOptions = [
+  { value: "gpt-4", label: "GPT-4" },
+  { value: "claude-3", label: "Claude 3" },
+  { value: "llama-3", label: "Llama 3" },
+    ];
+
+  const [message, setMessage] = useState("");
+  const [running, setRunning] = useState(false);
 
   function getAuthHeaders(json = false) {
     const token = localStorage.getItem("token");
@@ -32,6 +45,34 @@ export default function PromptPage() {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setHistory(JSON.parse(raw));
+
+      const c = localStorage.getItem(COLLAPSE_KEY);
+      if (c) setCollapsed(c === "1");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    } catch {
+      // ignore
+    }
+  }, [history]);
 
   async function loadStyles() {
     setLoadingStyles(true);
@@ -50,16 +91,14 @@ export default function PromptPage() {
         return;
       }
 
-      if (!res.ok) {
-        throw new Error("Failed to load styles");
-      }
+      if (!res.ok) throw new Error("Failed to load styles");
 
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       setStylesList(list);
 
       if (list.length > 0) {
-        setStyle(list[0].name);
+        setStyle((prev) => prev || list[0].name);
       }
     } catch (err) {
       console.error(err);
@@ -69,93 +108,242 @@ export default function PromptPage() {
     }
   }
 
-  useEffect(() => {
-    loadStyles();
-  }, []);
+      function handleBackToLogin() {
+          localStorage.removeItem("token");
+          localStorage.removeItem("role");
+          document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          router.push("/");
+    }
 
-  async function onSubmit() {
-    if (!canSubmit) return;
-
+  async function loadHistory() {
     try {
-      const res = await fetch(`${API_BASE}/api/run_by_text`, {
-        method: "POST",
-        headers: getAuthHeaders(true),
-        body: JSON.stringify({
-          text: prompt.trim(),
-          category: "test",
-          styles: [style],
-        }),
+      const res = await fetch(`${API_BASE}/api/history`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+        cache: "no-store",
       });
 
-      if (!res.ok) {
-        const msg = await res.text();
-        alert(`Run failed (${res.status}): ${msg}`);
-        return;
-      }
+      if (!res.ok) throw new Error("Failed to load history");
 
       const data = await res.json();
-
-      router.push(
-        `/result?prompt_id=${data.prompt_id}&style=${encodeURIComponent(style)}`
-      );
+      const texts = Array.isArray(data) ? data.map((item) => item.text) : [];
+      setHistory(texts);
     } catch (err) {
       console.error(err);
-      alert("Something went wrong.");
     }
   }
 
+  useEffect(() => {
+    loadStyles();
+    loadHistory();
+  }, []);
+
+  const canSubmit = useMemo(
+    () => prompt.trim().length > 0 && style.trim().length > 0,
+    [prompt, style]
+  );
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return history.map((item, idx) => ({ item, idx }));
+
+    return history
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => item.toLowerCase().includes(q));
+  }, [history, filter]);
+
+  function handleSubmit() {
+    const v = prompt.trim();
+    if (!v || !style.trim() || running) return;
+
+    setHistory((prev) => {
+      const next = [v, ...prev.filter((x) => x !== v)];
+      return next.slice(0, 50);
+    });
+
+    setActiveIndex(0);
+    setRunning(true);
+
+      router.push(
+      `/result?text=${encodeURIComponent(v)}&style=${encodeURIComponent(style)}&model=${encodeURIComponent(selectedModel)}`
+    );
+
+    setPrompt("");
+  }
+
+  function handlePick(item: string, originalIndex: number) {
+    setPrompt(item);
+    setActiveIndex(originalIndex);
+  }
+
+  function clearHistory() {
+    setHistory([]);
+    setActiveIndex(null);
+  }
+
+  function deleteItem(originalIndex: number) {
+    setHistory((prev) => prev.filter((_, i) => i !== originalIndex));
+    setActiveIndex((cur) => {
+      if (cur === null) return null;
+      if (cur === originalIndex) return null;
+      return cur > originalIndex ? cur - 1 : cur;
+    });
+  }
+
   return (
-    <div className={styles.frame}>
-      <header className={styles.header}>
-        <div className={styles.logo}>StyleAttack</div>
-      </header>
+    <div className={styles.container}>
+      <aside
+        className={`${styles.sidebar} ${
+          collapsed ? styles.sidebarCollapsed : ""
+        }`}
+      >
+        <div className={styles.sidebarTop}>
+          <button
+            className={styles.collapseBtn}
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? "»" : "«"}
+          </button>
 
-      <section className={styles.center}>
-        <h2 className={styles.title}>Enter your prompt to test.</h2>
+          {!collapsed && (
+            <>
+              <div className={styles.sidebarTitle}>History</div>
+              <button className={styles.clearBtn} onClick={clearHistory}>
+                Clear
+              </button>
+            </>
+          )}
+        </div>
 
-        {message && <p className={styles.message}>{message}</p>}
+        {!collapsed && (
+          <>
+            <div className={styles.filterWrap}>
+              <input
+                className={styles.filterInput}
+                value={filter}
+                placeholder="Search history..."
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+
+            <div className={styles.historyList}>
+              {filtered.length === 0 ? (
+                <div className={styles.emptyHint}>
+                  {history.length === 0 ? "No history yet" : "No matches"}
+                </div>
+              ) : (
+                filtered.map(({ item, idx }) => (
+                  <div
+                    key={`${item}-${idx}`}
+                    className={`${styles.historyRow} ${
+                      activeIndex === idx ? styles.historyRowActive : ""
+                    }`}
+                  >
+                    <button
+                      className={styles.historyItem}
+                      onClick={() => handlePick(item, idx)}
+                      title={item}
+                    >
+                      {item}
+                    </button>
+
+                    <button
+                      className={styles.deleteBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteItem(idx);
+                      }}
+                      aria-label="Delete history item"
+                      title="Delete"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </aside>
+
+      <main className={styles.main}>
+        <div className={styles.mainHeader}>
+          <div>
+            <div className={styles.logoTitle}>StyleAttack Researcher</div>
+            <div className={styles.logoSub}>
+              sponsored by <span className={styles.logoSponsor}>Ada Analytics</span>
+            </div>
+          </div>
+
+          <button className={styles.logoutButton} onClick={handleBackToLogin}>
+            Back to Login
+          </button>
+        </div>
+
+        <h1 className={styles.title}>Enter your Prompt.</h1>
+
+        {message && <div className={styles.adminMessage}>{message}</div>}
 
         <div className={styles.inputRow}>
           <textarea
             className={styles.textarea}
-            placeholder="Enter here."
             value={prompt}
+            placeholder="Enter here..."
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                onSubmit();
+                handleSubmit();
               }
             }}
           />
-
-          <div className={styles.sideControls}>
+            <div className={styles.sideControls}>
+          <div className={styles.selectGroup}>
             <label className={styles.selectLabel}>
               <span className={styles.selectHint}>Style</span>
               <select
                 className={styles.select}
                 value={style}
                 onChange={(e) => setStyle(e.target.value)}
-                disabled={loadingStyles}
+                disabled={loadingStyles || running}
               >
-                {stylesList.map((opt) => (
-                  <option key={opt.id} value={opt.name}>
-                    {(opt.display_name || opt.name) + " Style"}
+                {stylesList.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.display_name || s.name}
                   </option>
                 ))}
               </select>
             </label>
 
-            <button
-              className={styles.goButton}
-              onClick={onSubmit}
-              disabled={!canSubmit}
-            >
-              Click
-            </button>
+            <label className={styles.selectLabel}>
+              <span className={styles.selectHint}>AI Model</span>
+              <select
+                className={styles.select}
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={running}
+              >
+                {modelOptions.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
+
+          <button
+            className={styles.goButton}
+            onClick={handleSubmit}
+            disabled={!canSubmit || running}
+          >
+            {running ? "Processing..." : "Click"}
+          </button>
         </div>
-      </section>
+        </div>
+      </main>
     </div>
   );
 }
