@@ -44,3 +44,22 @@ class StyleConfig(SQLModel, table=True):
     created_by: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class StyleHistory(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # record the original id
+    original_style_id: int = Field(index=True)
+
+    # The number of version
+    version: int = Field(default=1, index=True)
+
+    # CREATED / UPDATED / DELETED
+    action: str
+    name: str
+    display_name: str
+    instruction: str
+    is_active: bool
+
+    changed_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    changed_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

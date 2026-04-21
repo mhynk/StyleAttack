@@ -13,7 +13,14 @@ import csv
 import json
 from backend.services.classify import classify
 from backend.db.dp import init_db, get_session
-from backend.db.model import Prompt, Result, Transformation, User, StyleConfig
+from backend.db.model import (
+    Prompt,
+    Result,
+    Transformation,
+    User,
+    StyleConfig,
+    StyleHistory,
+)
 from backend.services.ollama import call_ollama
 from backend.schemas import PromptCreate, RunRequest
 from backend.auth.security import (
@@ -102,6 +109,31 @@ def require_researcher_or_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
     return current_user
 
+def get_next_style_version(session, style_id: int) -> int:
+    latest = session.exec(
+        select(StyleHistory)
+        .where(StyleHistory.original_style_id == style_id)
+        .order_by(StyleHistory.version.desc())
+    ).first()
+
+    if not latest:
+        return 1
+    return latest.version + 1
+
+
+def record_style_history(session, style: StyleConfig, action: str, changed_by: int):
+    history = StyleHistory(
+        original_style_id=style.id,
+        version=get_next_style_version(session, style.id),
+        action=action,
+        name=style.name,
+        display_name=style.display_name,
+        instruction=style.instruction,
+        is_active=style.is_active,
+        changed_by=changed_by,
+        changed_at=datetime.utcnow(),
+    )
+    session.add(history)
 
 def is_failed_transformation(text: str) -> bool:
     t = (text or "").lower()
@@ -200,7 +232,7 @@ def create_style(
 ):
     with get_session() as session:
         existing = session.exec(
-            select(StyleConfig).where(StyleConfig.name == body.name)
+            select(StyleConfig).where(StyleConfig.name == body.name.strip().lower())
         ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Style name already exists")
@@ -216,6 +248,11 @@ def create_style(
         session.add(style)
         session.commit()
         session.refresh(style)
+
+        #Record the generating history
+        record_style_history(session, style, "CREATED", current_user.id)
+        session.commit()
+
         return style
 
 
@@ -249,6 +286,11 @@ def update_style(
         session.add(style)
         session.commit()
         session.refresh(style)
+
+        # Recording the updating history
+        record_style_history(session, style, "UPDATED", current_user.id)
+        session.commit()
+
         return style
 
 
@@ -262,10 +304,31 @@ def delete_style(
         if not style:
             raise HTTPException(status_code=404, detail="Style not found")
 
+        record_style_history(session, style, "DELETED", current_user.id)
+
         session.delete(style)
         session.commit()
+
         return {"message": "Style deleted successfully"}
 
+@app.get("/api/admin/styles/history")
+def list_style_history(current_user: User = Depends(require_admin)):
+    with get_session() as session:
+        history = session.exec(
+            select(StyleHistory).order_by(StyleHistory.changed_at.desc())
+        ).all()
+        return history
+
+
+@app.get("/api/admin/styles/{style_id}/history")
+def get_style_history(style_id: int, current_user: User = Depends(require_admin)):
+    with get_session() as session:
+        history = session.exec(
+            select(StyleHistory)
+            .where(StyleHistory.original_style_id == style_id)
+            .order_by(StyleHistory.version.desc())
+        ).all()
+        return history
 
 # -------------------------
 # Researcher APIs

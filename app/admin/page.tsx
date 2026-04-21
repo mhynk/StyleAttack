@@ -16,6 +16,19 @@ type StyleRow = {
   is_active: boolean;
 };
 
+type StyleHistoryRow = {
+  id: number;
+  original_style_id: number;
+  version: number;
+  action: "CREATED" | "UPDATED" | "DELETED";
+  name: string;
+  display_name: string;
+  instruction: string;
+  is_active: boolean;
+  changed_by: number | null;
+  changed_at: string;
+};
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -39,6 +52,11 @@ export default function AdminPage() {
   const [newInstruction, setNewInstruction] = useState("");
   const [message, setMessage] = useState("");
   const [running, setRunning] = useState(false);
+  const [styleHistoryList, setStyleHistoryList] = useState<StyleHistoryRow[]>([]);
+  const [styleHistoryLoading, setStyleHistoryLoading] = useState(false);
+  const [selectedStyleId, setSelectedStyleId] = useState<number | null>(null);
+  const [selectedStyleName, setSelectedStyleName] = useState("All Styles");
+
 
   function getAuthHeaders(json = false) {
     const token = localStorage.getItem("token");
@@ -106,7 +124,9 @@ export default function AdminPage() {
   useEffect(() => {
     loadStyles();
     loadHistory();
+    loadAllStyleHistory();
   }, []);
+
   useEffect(() => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
@@ -196,6 +216,7 @@ export default function AdminPage() {
       setNewInstruction("");
       setMessage(`Added "${name}"`);
       await loadStyles();
+      await loadAllStyleHistory();
     } catch (err) {
       console.error(err);
       alert("Failed to add style");
@@ -220,6 +241,54 @@ export default function AdminPage() {
   }
 }
 
+    async function loadAllStyleHistory() {
+          setStyleHistoryLoading(true);
+
+          try {
+            const res = await fetch(`${API_BASE}/api/admin/styles/history`, {
+              method: "GET",
+              headers: getAuthHeaders(),
+              cache: "no-store",
+            });
+
+            if (!res.ok) throw new Error("Failed to load style history");
+
+            const data = await res.json();
+            setStyleHistoryList(Array.isArray(data) ? data : []);
+            setSelectedStyleId(null);
+            setSelectedStyleName("All Styles");
+          } catch (err) {
+            console.error(err);
+            setMessage("Failed to load style version history");
+          } finally {
+            setStyleHistoryLoading(false);
+          }
+        }
+
+    async function loadStyleHistory(styleId: number, styleName: string) {
+      setStyleHistoryLoading(true);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/styles/${styleId}/history`, {
+          method: "GET",
+          headers: getAuthHeaders(),
+          cache: "no-store",
+        });
+
+        if (!res.ok) throw new Error("Failed to load style history");
+
+        const data = await res.json();
+        setStyleHistoryList(Array.isArray(data) ? data : []);
+        setSelectedStyleId(styleId);
+        setSelectedStyleName(styleName);
+      } catch (err) {
+        console.error(err);
+        setMessage(`Failed to load history for "${styleName}"`);
+      } finally {
+        setStyleHistoryLoading(false);
+      }
+    }
+
   async function handleDeleteStyle(id: number, name: string) {
     try {
       const res = await fetch(`${API_BASE}/api/admin/styles/${id}`, {
@@ -235,6 +304,7 @@ export default function AdminPage() {
 
       setMessage(`Deleted "${name}"`);
       await loadStyles();
+      await loadAllStyleHistory();
     } catch (err) {
       console.error(err);
       alert("Failed to delete style");
@@ -436,19 +506,108 @@ export default function AdminPage() {
             </button>
           </div>
 
-          <div className={styles.styleList}>
-            {stylesList.map((s) => (
-              <div key={s.id} className={styles.styleRow}>
+         <div className={styles.styleList}>
+          {stylesList.map((s) => (
+            <div
+              key={s.id}
+              className={`${styles.styleRow} ${
+                selectedStyleId === s.id ? styles.styleRowSelected : ""
+              }`}
+              onClick={() => loadStyleHistory(s.id, s.display_name || s.name)}
+            >
+              <div className={styles.styleInfo}>
                 <span>{s.display_name || s.name}</span>
+                <span className={styles.styleMeta}>
+                  {s.is_active ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              <div className={styles.styleActions}>
                 <button
                   className={styles.styleDeleteButton}
-                  onClick={() => handleDeleteStyle(s.id, s.name)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteStyle(s.id, s.name);
+                  }}
                 >
                   Delete
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
+            <div className={styles.styleHistoryPanel}>
+              <div className={styles.styleHistoryHeader}>
+                <div className={styles.styleHistoryHeaderLeft}>
+                  <div className={styles.styleHistoryTitle}>Style Version History</div>
+                  <div className={styles.styleHistorySubtitle}>
+                    Viewing: {selectedStyleName}
+                  </div>
+                </div>
+
+                <button
+                  className={styles.styleGhostButton}
+                  onClick={loadAllStyleHistory}
+                >
+                  View All History
+                </button>
+              </div>
+
+              <div className={styles.styleHistoryScroll}>
+                {styleHistoryLoading ? (
+                  <div className={styles.styleHistoryEmpty}>Loading style history...</div>
+                ) : styleHistoryList.length === 0 ? (
+                  <div className={styles.styleHistoryEmpty}>No style history yet.</div>
+                ) : (
+                  <div className={styles.styleHistoryGrid}>
+                    {styleHistoryList.map((item) => (
+                      <div
+                        key={`${item.original_style_id}-${item.version}-${item.id}`}
+                        className={styles.styleHistoryCard}
+                      >
+                        <div className={styles.styleHistoryCardTop}>
+                          <div className={styles.styleHistoryCardTitle}>
+                            {item.display_name || item.name} · v{item.version}
+                          </div>
+
+                          <span
+                            className={`${styles.styleHistoryBadge} ${
+                              item.action === "CREATED"
+                                ? styles.styleHistoryBadgeCreated
+                                : item.action === "UPDATED"
+                                ? styles.styleHistoryBadgeUpdated
+                                : styles.styleHistoryBadgeDeleted
+                            }`}
+                          >
+                            {item.action}
+                          </span>
+                        </div>
+
+                        <div className={styles.styleHistoryBody}>
+                          <div>
+                            <strong>Style Name:</strong> {item.name}
+                          </div>
+                          <div>
+                            <strong>Status:</strong> {item.is_active ? "Active" : "Inactive"}
+                          </div>
+                          <div>
+                            <strong>Changed By:</strong> {item.changed_by ?? "-"}
+                          </div>
+                          <div>
+                            <strong>Changed At:</strong>{" "}
+                            {new Date(item.changed_at).toLocaleString()}
+                          </div>
+                          <div>
+                            <strong>Instruction:</strong> {item.instruction}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
         </div>
       </main>
     </div>

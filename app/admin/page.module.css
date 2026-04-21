@@ -433,3 +433,272 @@
   color: #a0a0a0;
   font-weight: 600;
 }
+
+.styleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.styleMeta {
+  font-size: 12px;
+  color: #8f8f8f;
+}
+
+.styleActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.styleGhostButton {
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #1b1b1b;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.styleGhostButton:hover {
+  background: #262626;
+  color: #fff;
+}
+
+.styleHistoryPanel {
+  margin-top: 16px;
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  padding: 14px;
+  background: #151515;
+}
+
+.styleHistoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.styleHistoryHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.styleHistoryTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.styleHistorySubtitle {
+  font-size: 12px;
+  color: #8f8f8f;
+}
+
+.styleHistoryGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.styleHistoryEmpty {
+  padding: 10px 2px;
+  font-size: 13px;
+  color: #9a9a9a;
+}
+
+.styleHistoryCard {
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  padding: 14px;
+  background: #1a1a1a;
+}
+
+.styleHistoryCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.styleHistoryCardTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.styleHistoryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #cfcfcf;
+}
+
+.styleHistoryBody strong {
+  color: #fff;
+}
+
+.styleHistoryBadge {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.styleHistoryBadgeCreated {
+  border: 1px solid #21452b;
+  background: #13271a;
+  color: #8ee7a5;
+}
+
+.styleHistoryBadgeUpdated {
+  border: 1px solid #203a5c;
+  background: #112033;
+  color: #94c7ff;
+}
+
+.styleHistoryBadgeDeleted {
+  border: 1px solid #4a2626;
+  background: #2a1515;
+  color: #ffb3b3;
+}
+.styleRow {
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.styleRow:hover {
+  background: #191919;
+  border-color: #333;
+}
+
+.styleRowSelected {
+  background: #1d1d1d;
+  border-color: #3a3a3a;
+}
+
+.styleHistoryPanel {
+  margin-top: 16px;
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  background: #151515;
+  display: flex;
+  flex-direction: column;
+  height: 420px;
+  overflow: hidden;
+}
+
+.styleHistoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid #242424;
+  background: #151515;
+  flex-shrink: 0;
+}
+
+.styleHistoryHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.styleHistoryTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.styleHistorySubtitle {
+  font-size: 12px;
+  color: #8f8f8f;
+}
+
+.styleHistoryScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+}
+
+.styleHistoryGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.styleHistoryEmpty {
+  padding: 10px 2px;
+  font-size: 13px;
+  color: #9a9a9a;
+}
+
+.styleHistoryCard {
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  padding: 14px;
+  background: #1a1a1a;
+}
+
+.styleHistoryCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.styleHistoryCardTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.styleHistoryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #cfcfcf;
+}
+
+.styleHistoryBody strong {
+  color: #fff;
+}
+
+.styleHistoryBadge {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.styleHistoryBadgeCreated {
+  border: 1px solid #21452b;
+  background: #13271a;
+  color: #8ee7a5;
+}
+
+.styleHistoryBadgeUpdated {
+  border: 1px solid #203a5c;
+  background: #112033;
+  color: #94c7ff;
+}
+
+.styleHistoryBadgeDeleted {
+  border: 1px solid #4a2626;
+  background: #2a1515;
+  color: #ffb3b3;
+}
