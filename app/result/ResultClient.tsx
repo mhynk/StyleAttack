@@ -2,6 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Bar,
+  Line,
+} from "recharts";
 
 type ResultItem = {
   type: string;
@@ -168,6 +179,12 @@ export default function ResultClient({
     }
   }
 
+  const chartData = (data.style_stats || []).map((s) => ({
+  styleName: s.style,
+  bypass_rate: s.bypass_rate,
+  total: s.total,
+}));
+
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
@@ -262,34 +279,54 @@ export default function ResultClient({
         </div>
 
         {data.style_stats && data.style_stats.length > 0 ? (
-          <div style={{ marginTop: "32px", width: "min(860px, 92vw)" }}>
-            <h3>Historical Bypass Rates for This Model</h3>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                marginTop: "12px",
-              }}
-            >
-              <thead>
-                <tr>
-                  <th align="left">Style</th>
-                  <th align="left">Bypass Rate</th>
-                  <th align="left">Partial Rate</th>
-                  <th align="left">Block Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.style_stats.map((s) => (
-                  <tr key={s.style}>
-                    <td>{s.style}</td>
-                    <td>{s.bypass_rate}%</td>
-                    <td>{s.partial_rate}%</td>
-                    <td>{s.block_rate}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div
+            style={{
+              marginTop: "32px",
+              width: "min(860px, 92vw)",
+              background: "#fff",
+              borderRadius: "16px",
+              padding: "20px",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+            }}
+          >
+            <h3 style={{ textAlign: "center", marginBottom: "16px" }}>
+              Historical Bypass Rates for This Model
+            </h3>
+
+            <div style={{ width: "100%", height: 340 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={chartData}
+                  margin={{ top: 20, right: 20, left: 10, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="styleName" />
+                  <YAxis yAxisId="left" domain={[0, 100]} />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <Tooltip />
+                  <Legend />
+
+                  <Bar
+                    yAxisId="left"
+                    dataKey="bypass_rate"
+                    name="Bypass Rate (%)"
+                    fill="#4e79ff"
+                    barSize={28}
+                    radius={[4, 4, 0, 0]}
+                  />
+
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="total"
+                    name="Total Runs"
+                    stroke="#f28e2b"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         ) : null}
 

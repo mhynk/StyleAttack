@@ -387,6 +387,8 @@ def get_model_style_stats(session, model_name: str, current_user_id: int):
         item["block_rate"] = round(item["blocked"] / total * 100, 2)
         output.append(item)
 
+    # 让 baseline 放最前面，其他按名字排序
+    output.sort(key=lambda x: (x["style"] != "baseline", x["style"]))
     return output
 
 
