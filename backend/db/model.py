@@ -63,3 +63,22 @@ class StyleHistory(SQLModel, table=True):
 
     changed_by: Optional[int] = Field(default=None, foreign_key="user.id")
     changed_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+class ModelConfig(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # short key used by frontend, for example: llama3, mistral, gemma2b
+    name: str = Field(index=True, unique=True)
+
+    # user-facing name, for example: Llama 3
+    display_name: str
+
+    # currently we only support ollama
+    provider: str = Field(default="ollama", index=True)
+
+    # real model name used by Ollama, for example: llama3:latest
+    model_name: str
+
+    is_active: bool = True
+    created_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

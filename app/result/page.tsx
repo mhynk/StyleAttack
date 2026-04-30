@@ -35,17 +35,17 @@ type RunResponse = {
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ text?: string; style?: string }>;
+  searchParams: Promise<{ text?: string; style?: string; model?: string }>;
 }) {
   const sp = await searchParams;
   const text = (sp.text ?? "").trim();
   const selectedStyle = (sp.style ?? "").trim();
-
+  const selectedModel = (sp.model ?? "").trim();
   const token = (await cookies()).get("token")?.value;
 
-  if (!text || !selectedStyle) {
-    return <div style={{ padding: "40px" }}>Missing text or style.</div>;
-  }
+  if (!text || !selectedStyle || !selectedModel) {
+   return <div style={{ padding: "40px" }}>Missing text, style, or model.</div>;
+}
 
   const res = await fetch(`${API_BASE}/api/run_by_text`, {
     method: "POST",
@@ -57,6 +57,7 @@ export default async function ResultsPage({
       text,
       category: "test",
       styles: [selectedStyle],
+      model: selectedModel,
     }),
     cache: "no-store",
   });

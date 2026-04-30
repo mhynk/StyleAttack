@@ -20,9 +20,19 @@ from backend.db.model import (
     User,
     StyleConfig,
     StyleHistory,
+    ModelConfig,
 )
 from backend.services.ollama import call_ollama
-from backend.schemas import PromptCreate, RunRequest
+from backend.schemas import (
+    PromptCreate,
+    RunRequest,
+    RegisterRequest,
+    LoginRequest,
+    StyleCreateRequest,
+    StyleUpdateRequest,
+    ModelCreateRequest,
+    ModelUpdateRequest,
+)
 from backend.auth.security import (
     hash_password,
     verify_password,
@@ -38,10 +48,10 @@ from backend.schemas import (
 
 load_dotenv()
 
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
-if not OLLAMA_MODEL:
-    raise Exception("OLLAMA_MODEL is not set in .env")
+DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest").strip()
 
+if not DEFAULT_OLLAMA_MODEL:
+    raise Exception("OLLAMA_MODEL is not set in .env")
 app = FastAPI(title="Capstone Style-Based Testing Backend")
 security = HTTPBearer()
 
@@ -60,11 +70,12 @@ app.add_middleware(
 def on_startup():
     init_db()
 
-    # 可选：初始化一个默认 admin
+    # initialize a default admin
     with get_session() as session:
         existing_admin = session.exec(
             select(User).where(User.username == "admin")
         ).first()
+
         if not existing_admin:
             admin = User(
                 username="admin",
@@ -74,7 +85,106 @@ def on_startup():
             session.add(admin)
             session.commit()
 
+        # initialize a default model
+        existing_model = session.exec(
+            select(ModelConfig)
+        ).first()
 
+        if not existing_model:
+            default_model = ModelConfig(
+                name="llama3",
+                display_name="Llama 3",
+                provider="ollama",
+                model_name=DEFAULT_OLLAMA_MODEL,
+                is_active=True,
+                created_by=None,
+            )
+
+            session.add(default_model)
+            session.commit()
+
+def model_to_response(model: ModelConfig):
+    return {
+        "id": model.id,
+        "name": model.name,
+        "value": model.name,
+        "label": model.display_name,
+        "display_name": model.display_name,
+        "provider": model.provider,
+        "model_name": model.model_name,
+        "is_active": model.is_active,
+        "created_at": model.created_at,
+        "updated_at": model.updated_at,
+    }
+
+def resolve_model_config(session, requested_model: Optional[str]) -> ModelConfig:
+    requested = (requested_model or "").strip()
+
+    if requested:
+        model_config = session.exec(
+            select(ModelConfig)
+            .where(ModelConfig.name == requested)
+            .where(ModelConfig.is_active == True)
+        ).first()
+
+        # fallback: allow passing real Ollama model name like llama3:latest
+        if not model_config:
+            model_config = session.exec(
+                select(ModelConfig)
+                .where(ModelConfig.model_name == requested)
+                .where(ModelConfig.is_active == True)
+            ).first()
+
+        if not model_config:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{requested}' is not available or not active."
+            )
+
+        return model_config
+
+    # no model selected, use default active model
+    default_model = session.exec(
+        select(ModelConfig)
+        .where(ModelConfig.model_name == DEFAULT_OLLAMA_MODEL)
+        .where(ModelConfig.is_active == True)
+    ).first()
+
+    if default_model:
+        return default_model
+
+    first_active = session.exec(
+        select(ModelConfig)
+        .where(ModelConfig.is_active == True)
+        .order_by(ModelConfig.created_at.asc())
+    ).first()
+
+    if not first_active:
+        raise HTTPException(
+            status_code=400,
+            detail="No active model is available. Please add or activate a model first."
+        )
+
+    return first_active
+
+def ensure_default_model():
+    with get_session() as session:
+        existing_model = session.exec(select(ModelConfig)).first()
+
+        if existing_model:
+            return
+
+        default_model = ModelConfig(
+            name="llama3",
+            display_name="Llama 3",
+            provider="ollama",
+            model_name=DEFAULT_OLLAMA_MODEL,
+            is_active=True,
+            created_by=None,
+        )
+
+        session.add(default_model)
+        session.commit()
 # -------------------------
 # Auth helpers
 # -------------------------
@@ -311,6 +421,156 @@ def delete_style(
 
         return {"message": "Style deleted successfully"}
 
+@app.get("/api/models")
+def list_active_models(current_user: User = Depends(require_researcher_or_admin)):
+    with get_session() as session:
+        models = session.exec(
+            select(ModelConfig)
+            .where(ModelConfig.is_active == True)
+            .order_by(ModelConfig.created_at.asc())
+        ).all()
+
+        return {
+            "default": models[0].name if models else "",
+            "models": [model_to_response(m) for m in models],
+        }
+
+@app.get("/api/admin/models")
+def admin_list_models(current_user: User = Depends(require_admin)):
+    with get_session() as session:
+        models = session.exec(
+            select(ModelConfig).order_by(ModelConfig.created_at.asc())
+        ).all()
+
+        return [model_to_response(m) for m in models]
+
+
+@app.post("/api/admin/models")
+def admin_create_model(
+    body: ModelCreateRequest,
+    current_user: User = Depends(require_admin),
+):
+    name = body.name.strip().lower().replace(" ", "-")
+    display_name = body.display_name.strip()
+    provider = body.provider.strip().lower()
+    model_name = body.model_name.strip()
+
+    if not name or not display_name or not model_name:
+        raise HTTPException(
+            status_code=400,
+            detail="name, display_name, and model_name are required."
+        )
+
+    if provider != "ollama":
+        raise HTTPException(
+            status_code=400,
+            detail="Currently only Ollama models are supported."
+        )
+
+    with get_session() as session:
+        existing = session.exec(
+            select(ModelConfig).where(ModelConfig.name == name)
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="Model name already exists."
+            )
+
+        model = ModelConfig(
+            name=name,
+            display_name=display_name,
+            provider=provider,
+            model_name=model_name,
+            is_active=body.is_active,
+            created_by=current_user.id,
+        )
+
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        return model_to_response(model)
+
+
+@app.patch("/api/admin/models/{model_id}")
+def admin_update_model(
+    model_id: int,
+    body: ModelUpdateRequest,
+    current_user: User = Depends(require_admin),
+):
+    with get_session() as session:
+        model = session.get(ModelConfig, model_id)
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found.")
+
+        if body.name is not None:
+            new_name = body.name.strip().lower().replace(" ", "-")
+
+            if not new_name:
+                raise HTTPException(status_code=400, detail="Model name cannot be empty.")
+
+            existing = session.exec(
+                select(ModelConfig)
+                .where(ModelConfig.name == new_name)
+                .where(ModelConfig.id != model_id)
+            ).first()
+
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Another model already uses this name."
+                )
+
+            model.name = new_name
+
+        if body.display_name is not None:
+            model.display_name = body.display_name.strip()
+
+        if body.provider is not None:
+            provider = body.provider.strip().lower()
+
+            if provider != "ollama":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Currently only Ollama models are supported."
+                )
+
+            model.provider = provider
+
+        if body.model_name is not None:
+            model.model_name = body.model_name.strip()
+
+        if body.is_active is not None:
+            model.is_active = body.is_active
+
+        model.updated_at = datetime.utcnow()
+
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        return model_to_response(model)
+
+
+@app.delete("/api/admin/models/{model_id}")
+def admin_delete_model(
+    model_id: int,
+    current_user: User = Depends(require_admin),
+):
+    with get_session() as session:
+        model = session.get(ModelConfig, model_id)
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found.")
+
+        session.delete(model)
+        session.commit()
+
+        return {"message": "Model deleted successfully."}
+
 @app.get("/api/admin/styles/history")
 def list_style_history(current_user: User = Depends(require_admin)):
     with get_session() as session:
@@ -361,10 +621,15 @@ def create_prompt(body: PromptCreate, current_user: User = Depends(require_resea
 class RunByTextRequest(BaseModel):
     text: str
     category: str = "test"
-    styles: List[str] = []   # style names from DB
+    styles: List[str] = []
+    model: Optional[str] = None
 
 
-async def apply_style_with_instruction(original_text: str, instruction: str) -> str:
+async def apply_style_with_instruction(
+    original_text: str,
+    instruction: str,
+    model_name: str,
+) -> str:
     rewrite_prompt = f"""
 You are a text rewriting assistant.
 
@@ -384,7 +649,7 @@ Rules:
 Text to rewrite:
 {original_text}
 """
-    rewritten = await call_ollama(OLLAMA_MODEL, rewrite_prompt)
+    rewritten = await call_ollama(model_name, rewrite_prompt)
     return rewritten.strip()
 
 @app.get("/api/history")
@@ -397,6 +662,76 @@ def get_history(current_user: User = Depends(require_researcher_or_admin)):
         ).all()
         return prompts
 
+@app.delete("/api/history/{prompt_id}")
+def delete_history_item(
+    prompt_id: int,
+    current_user: User = Depends(require_researcher_or_admin)
+):
+    with get_session() as session:
+        prompt = session.get(Prompt, prompt_id)
+
+        if not prompt:
+            raise HTTPException(status_code=404, detail="History item not found")
+
+        # 只能删除自己的 history，避免误删别人的记录
+        if prompt.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # 先删这个 prompt 相关的 results
+        results = session.exec(
+            select(Result).where(Result.prompt_id == prompt_id)
+        ).all()
+
+        for r in results:
+            session.delete(r)
+
+        # 再删这个 prompt 相关的 transformations
+        transformations = session.exec(
+            select(Transformation).where(Transformation.prompt_id == prompt_id)
+        ).all()
+
+        for t in transformations:
+            session.delete(t)
+
+        # 最后删 prompt 本身
+        session.delete(prompt)
+        session.commit()
+
+        return {"message": "History item deleted successfully"}
+
+
+@app.delete("/api/history")
+def clear_history(
+    current_user: User = Depends(require_researcher_or_admin)
+):
+    with get_session() as session:
+        prompts = session.exec(
+            select(Prompt).where(Prompt.user_id == current_user.id)
+        ).all()
+
+        for prompt in prompts:
+            if prompt.id is None:
+                continue
+
+            results = session.exec(
+                select(Result).where(Result.prompt_id == prompt.id)
+            ).all()
+
+            for r in results:
+                session.delete(r)
+
+            transformations = session.exec(
+                select(Transformation).where(Transformation.prompt_id == prompt.id)
+            ).all()
+
+            for t in transformations:
+                session.delete(t)
+
+            session.delete(prompt)
+
+        session.commit()
+
+        return {"message": "History cleared successfully"}
 
 def get_model_style_stats(session, model_name: str, current_user_id: int):
     prompts = session.exec(
@@ -502,9 +837,20 @@ async def run_by_text(
     if not body.text or not body.text.strip():
         raise HTTPException(status_code=400, detail="text is required")
 
-    model_name = f"ollama:{OLLAMA_MODEL}"
+
 
     with get_session() as session:
+        model_config = resolve_model_config(session, body.model)
+
+        if model_config.provider != "ollama":
+            raise HTTPException(
+                status_code=400,
+                detail="Currently only Ollama models are supported."
+            )
+
+        selected_model = model_config.model_name
+        model_name = f"ollama:{selected_model}"
+
         p = Prompt(
             text=body.text.strip(),
             category=body.category,
@@ -517,7 +863,7 @@ async def run_by_text(
         outputs = []
 
         # baseline
-        base_resp = await call_ollama(OLLAMA_MODEL, p.text)
+        base_resp = await call_ollama(selected_model, p.text)
         base_label = classify(base_resp)
 
         base_result = Result(
@@ -561,7 +907,8 @@ async def run_by_text(
 
             transformed_text = await apply_style_with_instruction(
                 p.text,
-                style.instruction
+                style.instruction,
+                selected_model
             )
 
             if is_failed_transformation(transformed_text):
@@ -606,7 +953,7 @@ async def run_by_text(
             session.commit()
             session.refresh(t)
 
-            resp = await call_ollama(OLLAMA_MODEL, transformed_text)
+            resp = await call_ollama(selected_model, transformed_text)
             label = classify(resp)
 
             r = Result(

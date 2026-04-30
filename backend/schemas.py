@@ -30,3 +30,18 @@ class StyleUpdateRequest(BaseModel):
     display_name: Optional[str] = None
     instruction: Optional[str] = None
     is_active: Optional[bool] = None
+
+class ModelCreateRequest(BaseModel):
+    name: str
+    display_name: str
+    provider: str = "ollama"
+    model_name: str
+    is_active: bool = True
+
+
+class ModelUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    display_name: Optional[str] = None
+    provider: Optional[str] = None
+    model_name: Optional[str] = None
+    is_active: Optional[bool] = None

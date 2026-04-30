@@ -16,11 +16,28 @@ type StyleRow = {
   is_active: boolean;
 };
 
+type ModelOption = {
+  id: number;
+  name: string;
+  value: string;
+  label: string;
+  display_name: string;
+  provider: string;
+  model_name: string;
+  is_active: boolean;
+};
+
+type HistoryItem = {
+  id: number;
+  text: string;
+  created_at?: string;
+};
+
 export default function ResearcherPage() {
   const router = useRouter();
 
   const [prompt, setPrompt] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
@@ -28,12 +45,9 @@ export default function ResearcherPage() {
   const [style, setStyle] = useState("");
   const [stylesList, setStylesList] = useState<StyleRow[]>([]);
   const [loadingStyles, setLoadingStyles] = useState(true);
-  const [selectedModel, setSelectedModel] = useState("gpt-4");
-  const modelOptions = [
-  { value: "gpt-4", label: "GPT-4" },
-  { value: "claude-3", label: "Claude 3" },
-  { value: "llama-3", label: "Llama 3" },
-    ];
+  const [selectedModel, setSelectedModel] = useState("");
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+  const [loadingModels, setLoadingModels] = useState(true);
 
   const [message, setMessage] = useState("");
   const [running, setRunning] = useState(false);
@@ -49,7 +63,20 @@ export default function ResearcherPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setHistory(JSON.parse(raw));
+      if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setHistory(
+              parsed
+                .filter((item) => item && typeof item.text === "string")
+                .map((item) => ({
+                  id: Number(item.id),
+                  text: item.text,
+                  created_at: item.created_at,
+                }))
+            );
+          }
+        }
 
       const c = localStorage.getItem(COLLAPSE_KEY);
       if (c) setCollapsed(c === "1");
@@ -108,6 +135,44 @@ export default function ResearcherPage() {
     }
   }
 
+  async function loadModels() {
+  setLoadingModels(true);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/models`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      setMessage("Please log in first.");
+      return;
+    }
+
+    if (!res.ok) throw new Error("Failed to load models");
+
+    const data = await res.json();
+    console.log("Loaded models:", data);
+    const list = Array.isArray(data.models) ? data.models : [];
+
+    setModelOptions(list);
+
+    setSelectedModel((prev) => {
+      if (prev && list.some((m: ModelOption) => m.value === prev)) {
+        return prev;
+      }
+
+      return data.default || list[0]?.value || "";
+    });
+  } catch (err) {
+    console.error(err);
+    setMessage("Failed to load models.");
+  } finally {
+    setLoadingModels(false);
+  }
+}
+
       function handleBackToLogin() {
           localStorage.removeItem("token");
           localStorage.removeItem("role");
@@ -126,8 +191,15 @@ export default function ResearcherPage() {
       if (!res.ok) throw new Error("Failed to load history");
 
       const data = await res.json();
-      const texts = Array.isArray(data) ? data.map((item) => item.text) : [];
-      setHistory(texts);
+
+    const items = Array.isArray(data)
+      ? data.map((item) => ({
+          id: item.id,
+          text: item.text,
+          created_at: item.created_at,
+        }))
+      : [];
+      setHistory(items);
     } catch (err) {
       console.error(err);
     }
@@ -136,34 +208,33 @@ export default function ResearcherPage() {
   useEffect(() => {
     loadStyles();
     loadHistory();
+    loadHistory();
+    loadModels()
   }, []);
 
-  const canSubmit = useMemo(
-    () => prompt.trim().length > 0 && style.trim().length > 0,
-    [prompt, style]
-  );
+    const canSubmit = useMemo(
+      () =>
+        prompt.trim().length > 0 &&
+        style.trim().length > 0 &&
+        selectedModel.trim().length > 0,
+      [prompt, style, selectedModel]
+    );
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return history.map((item, idx) => ({ item, idx }));
+    const filtered = useMemo(() => {
+      const q = filter.trim().toLowerCase();
+      if (!q) return history.map((item, idx) => ({ item, idx }));
 
-    return history
-      .map((item, idx) => ({ item, idx }))
-      .filter(({ item }) => item.toLowerCase().includes(q));
-  }, [history, filter]);
+      return history
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item }) => item.text.toLowerCase().includes(q));
+    }, [history, filter]);
 
   function handleSubmit() {
     const v = prompt.trim();
-    if (!v || !style.trim() || running) return;
-
-    setHistory((prev) => {
-      const next = [v, ...prev.filter((x) => x !== v)];
-      return next.slice(0, 50);
-    });
+    if (!v || !style.trim() || !selectedModel.trim() || running) return;
 
     setActiveIndex(0);
     setRunning(true);
-
       router.push(
       `/result?text=${encodeURIComponent(v)}&style=${encodeURIComponent(style)}&model=${encodeURIComponent(selectedModel)}`
     );
@@ -171,24 +242,57 @@ export default function ResearcherPage() {
     setPrompt("");
   }
 
-  function handlePick(item: string, originalIndex: number) {
-    setPrompt(item);
-    setActiveIndex(originalIndex);
-  }
+    function handlePick(item: HistoryItem, originalIndex: number) {
+      setPrompt(item.text);
+      setActiveIndex(originalIndex);
+    }
 
-  function clearHistory() {
-    setHistory([]);
-    setActiveIndex(null);
-  }
+    async function clearHistory() {
+      try {
+        const res = await fetch(`${API_BASE}/api/history`, {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        });
 
-  function deleteItem(originalIndex: number) {
-    setHistory((prev) => prev.filter((_, i) => i !== originalIndex));
-    setActiveIndex((cur) => {
-      if (cur === null) return null;
-      if (cur === originalIndex) return null;
-      return cur > originalIndex ? cur - 1 : cur;
-    });
-  }
+        if (!res.ok) {
+          const msg = await res.text();
+          alert(`Clear history failed (${res.status}): ${msg}`);
+          return;
+        }
+
+        setHistory([]);
+        setActiveIndex(null);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to clear history");
+      }
+    }
+
+    async function deleteItem(item: HistoryItem, originalIndex: number) {
+      try {
+        const res = await fetch(`${API_BASE}/api/history/${item.id}`, {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        });
+
+        if (!res.ok) {
+          const msg = await res.text();
+          alert(`Delete history failed (${res.status}): ${msg}`);
+          return;
+        }
+
+        setHistory((prev) => prev.filter((x) => x.id !== item.id));
+
+        setActiveIndex((cur) => {
+          if (cur === null) return null;
+          if (cur === originalIndex) return null;
+          return cur > originalIndex ? cur - 1 : cur;
+        });
+      } catch (err) {
+        console.error(err);
+        alert("Failed to delete history item");
+      }
+    }
 
   return (
     <div className={styles.container}>
@@ -236,7 +340,7 @@ export default function ResearcherPage() {
               ) : (
                 filtered.map(({ item, idx }) => (
                   <div
-                    key={`${item}-${idx}`}
+                    key={`${item.id}-${idx}`}
                     className={`${styles.historyRow} ${
                       activeIndex === idx ? styles.historyRowActive : ""
                     }`}
@@ -244,16 +348,16 @@ export default function ResearcherPage() {
                     <button
                       className={styles.historyItem}
                       onClick={() => handlePick(item, idx)}
-                      title={item}
+                      title={item.text}
                     >
-                      {item}
+                      {item.text}
                     </button>
 
                     <button
                       className={styles.deleteBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteItem(idx);
+                        deleteItem(item,idx);
                       }}
                       aria-label="Delete history item"
                       title="Delete"
@@ -320,17 +424,21 @@ export default function ResearcherPage() {
             <label className={styles.selectLabel}>
               <span className={styles.selectHint}>AI Model</span>
               <select
-                className={styles.select}
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={running}
-              >
-                {modelOptions.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
+                  className={styles.select}
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={loadingModels || running}
+                >
+                  {modelOptions.length === 0 ? (
+                    <option value="">No active models</option>
+                  ) : (
+                    modelOptions.map((model) => (
+                      <option key={model.id} value={model.value}>
+                        {model.label} ({model.model_name})
+                      </option>
+                    ))
+                  )}
+                </select>
             </label>
           </div>
 
