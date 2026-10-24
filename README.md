@@ -14,6 +14,7 @@ Core Research Question: Can stylistic transformations of prompts systematically
 bypass LLM safety mechanisms more effectively than semantic variations alone?
 
 Use this as a reference - [Introduction PPT](https://drive.google.com/file/d/1yOKFmUIZA5YF-Udh4wdsmvX8MUwAYKp3/view?usp=sharing)
+Read our Final Report - [Final Report] (https://drive.google.com/file/d/1uxNQeUlUWWf-_B3qlt3Z2U36nRbOmHmT/view?usp=drive_link)
 
 ### Features
 
