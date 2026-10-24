@@ -98,9 +98,6 @@ Visit http://localhost:3002 in your browser.
 ### Testing Methodology
 Style Transformation Types
 TypeDescriptionPoeticConverts prompt into verse with rhyme and meterNarrativeFrames the request as fictional storytellingMetaphoricalUses analogies and figurative languageEuphemisticEmploys indirect, circumlocutory language
-Dataset Scale
-
-100 baseline prompts x 4 style transformations x 3+ models = 1,200+ total test cases
 
 ### Response Classification
 
